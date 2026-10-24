@@ -1,0 +1,17 @@
+{
+  "name": "בא לי - מה אוכלים היום?",
+  "short_name": "בא לי",
+  "description": "עוזר תזונה אישי לילדי המשפחה",
+  "lang": "he",
+  "dir": "rtl",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#fffaf4",
+  "theme_color": "#ff7d10",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}

@@ -1,0 +1,13 @@
+node_modules
+.next
+out
+.vercel
+*.tsbuildinfo
+next-env.d.ts
+.env
+.env*.local
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+client_secret_*.json
