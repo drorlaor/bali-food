@@ -62,7 +62,9 @@ export async function POST(req: Request) {
       systemInstruction: instruction,
       history,
       userId: user.id,
+      sessionId,
       assistantMessageId,
+      userMessageSnippet: message,
     });
 
     const doneAt = new Date().toISOString();

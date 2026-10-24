@@ -4,7 +4,7 @@ try { dns.setDefaultResultOrder?.("ipv4first"); } catch {}
 import { GoogleGenAI, Type, type Content, type FunctionDeclaration, type Part } from "@google/genai";
 import { and, eq } from "drizzle-orm";
 import { getDb } from "@/db";
-import { childMemoryFacts, MEMORY_CATEGORIES, NUTRITIONAL_GROUPS, type MemoryCategory, type NutritionalGroup } from "@/db/schema";
+import { childMemoryFacts, aiErrorLogs, MEMORY_CATEGORIES, NUTRITIONAL_GROUPS, type MemoryCategory, type NutritionalGroup } from "@/db/schema";
 import type { MemoryUpdate } from "./types";
 
 export const TOOL_DECLARATIONS: FunctionDeclaration[] = [
@@ -33,6 +33,60 @@ export const TOOL_DECLARATIONS: FunctionDeclaration[] = [
     },
   },
 ];
+
+export function parseErrorCodeAndMessage(err: unknown): { code: string; message: string } {
+  let message = err instanceof Error ? err.message : String(err);
+  let code = "UNKNOWN";
+
+  if (err && typeof err === "object" && "status" in err && (err as { status: unknown }).status) {
+    code = String((err as { status: unknown }).status);
+  }
+
+  try {
+    const jsonMatch = message.match(/\{[\s\S]*"error"[\s\S]*\}/);
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[0]);
+      if (parsed.error) {
+        if (parsed.error.status) code = String(parsed.error.status);
+        else if (parsed.error.code) code = String(parsed.error.code);
+        if (parsed.error.message) message = parsed.error.message;
+      }
+    }
+  } catch {}
+
+  if (code === "UNKNOWN") {
+    if (message.includes("429") || message.includes("RESOURCE_EXHAUSTED") || message.includes("Quota exceeded")) code = "429_QUOTA";
+    else if (message.includes("503") || message.includes("high demand")) code = "503_OVERLOAD";
+    else if (message.includes("404")) code = "404_NOT_FOUND";
+  }
+
+  return { code, message };
+}
+
+export async function logAiError(entry: {
+  userId?: string | null;
+  sessionId?: string | null;
+  modelName: string;
+  errorCode?: string | null;
+  errorMessage: string;
+  promptSummary?: string | null;
+}) {
+  try {
+    const db = getDb();
+    await db.insert(aiErrorLogs).values({
+      id: crypto.randomUUID(),
+      userId: entry.userId || null,
+      sessionId: entry.sessionId || null,
+      modelName: entry.modelName,
+      errorCode: entry.errorCode || null,
+      errorMessage: entry.errorMessage.slice(0, 4000),
+      promptSummary: entry.promptSummary ? entry.promptSummary.slice(0, 500) : null,
+      createdAt: new Date().toISOString(),
+    });
+  } catch (dbErr) {
+    console.error("Failed to insert AI error log into DB:", dbErr);
+  }
+}
 
 async function executeTool(
   name: string,
@@ -66,7 +120,6 @@ async function executeTool(
   }
   if (name === "remove_child_preference") {
     const factId = String(args.factId || "");
-    // Scoped strictly to the authenticated user.
     const fact = await db
       .select()
       .from(childMemoryFacts)
@@ -91,7 +144,9 @@ export async function runChatTurn(opts: {
   systemInstruction: string;
   history: Content[];
   userId: string;
+  sessionId?: string;
   assistantMessageId: string;
+  userMessageSnippet?: string;
 }): Promise<{ text: string; memoryUpdates: MemoryUpdate[] }> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error("GEMINI_API_KEY is not configured");
@@ -99,29 +154,18 @@ export async function runChatTurn(opts: {
   const contents: Content[] = [...opts.history];
   const memoryUpdates: MemoryUpdate[] = [];
 
+  const candidateModels = Array.from(
+    new Set([opts.model, "gemini-3.5-flash", "gemini-3.8-flash", "gemini-3.6-flash"])
+  );
+
   for (let round = 0; round < 5; round++) {
-    let modelToUse = opts.model;
-    let res;
-    try {
-      res = await ai.models.generateContent({
-        model: modelToUse,
-        contents,
-        config: {
-          systemInstruction: opts.systemInstruction,
-          tools: [{ functionDeclarations: TOOL_DECLARATIONS }],
-          temperature: 0.7,
-        },
-      });
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      if (
-        modelToUse !== "gemini-3.5-flash" &&
-        (msg.includes("429") || msg.includes("503") || msg.includes("404") || msg.includes("quota") || msg.includes("demand"))
-      ) {
-        console.warn(`Model ${modelToUse} error (${msg.slice(0, 80)}), falling back to gemini-3.5-flash`);
-        modelToUse = "gemini-3.5-flash";
+    let res: Awaited<ReturnType<typeof ai.models.generateContent>> | null = null;
+    let lastError: unknown = null;
+
+    for (const modelToTry of candidateModels) {
+      try {
         res = await ai.models.generateContent({
-          model: modelToUse,
+          model: modelToTry,
           contents,
           config: {
             systemInstruction: opts.systemInstruction,
@@ -129,9 +173,28 @@ export async function runChatTurn(opts: {
             temperature: 0.7,
           },
         });
-      } else {
-        throw err;
+        if (res) break;
+      } catch (err: unknown) {
+        lastError = err;
+        const { code, message } = parseErrorCodeAndMessage(err);
+        console.warn(`[Gemini Error] Model ${modelToTry} failed (${code}): ${message.slice(0, 100)}`);
+        await logAiError({
+          userId: opts.userId,
+          sessionId: opts.sessionId,
+          modelName: modelToTry,
+          errorCode: code,
+          errorMessage: message,
+          promptSummary: opts.userMessageSnippet,
+        });
       }
+    }
+
+    if (!res) {
+      console.error("All Gemini candidate models failed.", lastError);
+      return {
+        text: "אוי, הראש שלי קצת עמוס כרגע (הגענו למכסת השיחות של ה-AI להיום). סיפרתי להורים בלוח הבקרה כדי שיוכלו לעדכן את זה! אפשר לנסות שוב עוד מעט או מאוחר יותר 😊",
+        memoryUpdates: [],
+      };
     }
 
     const calls = res.functionCalls || [];

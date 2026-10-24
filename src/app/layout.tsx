@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Rubik } from "next/font/google";
 import "./globals.css";
 import DevSwitcher from "@/components/DevSwitcher";
+import VersionNotifier from "@/components/VersionNotifier";
 
 const rubik = Rubik({ subsets: ["hebrew", "latin"], variable: "--font-rubik", display: "swap" });
 
@@ -28,6 +29,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="he" dir="rtl" className={rubik.variable}>
       <body className="font-sans antialiased">
         {devBypass && <DevSwitcher />}
+        <VersionNotifier />
         {children}
       </body>
     </html>

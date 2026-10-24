@@ -110,9 +110,20 @@ const DDL = [
     tool_calls_json TEXT,
     created_at TEXT
   )`,
+  `CREATE TABLE IF NOT EXISTS ai_error_logs (
+    id TEXT PRIMARY KEY NOT NULL,
+    user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
+    session_id TEXT REFERENCES chat_sessions(id) ON DELETE SET NULL,
+    model_name TEXT NOT NULL,
+    error_code TEXT,
+    error_message TEXT NOT NULL,
+    prompt_summary TEXT,
+    created_at TEXT
+  )`,
   `CREATE INDEX IF NOT EXISTS idx_facts_user ON child_memory_facts(user_id)`,
   `CREATE INDEX IF NOT EXISTS idx_sessions_user ON chat_sessions(user_id)`,
   `CREATE INDEX IF NOT EXISTS idx_messages_session ON chat_messages(session_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_error_logs_created ON ai_error_logs(created_at)`,
 ];
 
 export const DEV_PARENT_EMAIL = "parent@dev.local";

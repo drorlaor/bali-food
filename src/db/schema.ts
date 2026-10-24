@@ -85,8 +85,20 @@ export const chatMessages = sqliteTable("chat_messages", {
   createdAt: text("created_at"),
 });
 
+export const aiErrorLogs = sqliteTable("ai_error_logs", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").references(() => users.id, { onDelete: "cascade" }),
+  sessionId: text("session_id").references(() => chatSessions.id, { onDelete: "set null" }),
+  modelName: text("model_name").notNull(),
+  errorCode: text("error_code"),
+  errorMessage: text("error_message").notNull(),
+  promptSummary: text("prompt_summary"),
+  createdAt: text("created_at"),
+});
+
 export type User = typeof users.$inferSelect;
 export type ChildProfile = typeof childStaticProfiles.$inferSelect;
 export type MemoryFact = typeof childMemoryFacts.$inferSelect;
 export type ChatSession = typeof chatSessions.$inferSelect;
 export type ChatMessage = typeof chatMessages.$inferSelect;
+export type AiErrorLog = typeof aiErrorLogs.$inferSelect;
