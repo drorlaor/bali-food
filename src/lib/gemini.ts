@@ -100,15 +100,39 @@ export async function runChatTurn(opts: {
   const memoryUpdates: MemoryUpdate[] = [];
 
   for (let round = 0; round < 5; round++) {
-    const res = await ai.models.generateContent({
-      model: opts.model,
-      contents,
-      config: {
-        systemInstruction: opts.systemInstruction,
-        tools: [{ functionDeclarations: TOOL_DECLARATIONS }],
-        temperature: 0.7,
-      },
-    });
+    let modelToUse = opts.model;
+    let res;
+    try {
+      res = await ai.models.generateContent({
+        model: modelToUse,
+        contents,
+        config: {
+          systemInstruction: opts.systemInstruction,
+          tools: [{ functionDeclarations: TOOL_DECLARATIONS }],
+          temperature: 0.7,
+        },
+      });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (
+        modelToUse !== "gemini-3.5-flash" &&
+        (msg.includes("429") || msg.includes("503") || msg.includes("404") || msg.includes("quota") || msg.includes("demand"))
+      ) {
+        console.warn(`Model ${modelToUse} error (${msg.slice(0, 80)}), falling back to gemini-3.5-flash`);
+        modelToUse = "gemini-3.5-flash";
+        res = await ai.models.generateContent({
+          model: modelToUse,
+          contents,
+          config: {
+            systemInstruction: opts.systemInstruction,
+            tools: [{ functionDeclarations: TOOL_DECLARATIONS }],
+            temperature: 0.7,
+          },
+        });
+      } else {
+        throw err;
+      }
+    }
 
     const calls = res.functionCalls || [];
     if (!calls.length) {

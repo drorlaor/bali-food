@@ -79,10 +79,16 @@ export default function ChatApp({ user, quickPrompts }: Props) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ sessionId, message: msg }),
         });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "error");
-        setSessionId(data.sessionId);
-        setMessages((m) => [...m, { id: data.messageId, role: "assistant", content: data.reply, memoryUpdates: data.memoryUpdates }]);
+        const raw = await res.text();
+        let data: { sessionId?: string; messageId?: string; reply?: string; memoryUpdates?: MemoryUpdate[]; error?: string } = {};
+        try {
+          data = JSON.parse(raw);
+        } catch {
+          throw new Error(res.status === 504 ? "הבקשה ארכה זמן רב מדי (timeout)" : raw.slice(0, 120));
+        }
+        if (!res.ok) throw new Error(data.error || `שגיאה (${res.status})`);
+        setSessionId(data.sessionId || null);
+        setMessages((m) => [...m, { id: data.messageId || crypto.randomUUID(), role: "assistant", content: data.reply || "", memoryUpdates: data.memoryUpdates }]);
       } catch (e) {
         setMessages((m) => [
           ...m,
