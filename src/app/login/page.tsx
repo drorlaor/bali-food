@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   const { error } = await searchParams;
   const user = await getCurrentUser().catch(() => null);
-  if (user && !isDevBypass()) redirect(user.role === "parent" ? "/admin" : "/chat");
+  if (user && !isDevBypass()) redirect("/chat");
 
   return (
     <main className="flex min-h-dvh items-center justify-center p-6">
@@ -29,7 +29,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
           className="mt-6"
           action={async () => {
             "use server";
-            await signIn("google", { redirectTo: "/" });
+            await signIn("google", { redirectTo: "/chat" });
           }}
         >
           <button id="google-signin-btn" type="submit" className="btn-primary w-full py-3 text-base">
@@ -38,7 +38,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
         </form>
 
         {isDevBypass() && (
-          <a id="dev-enter-link" href="/" className="btn-ghost mt-3 w-full">
+          <a id="dev-enter-link" href="/chat" className="btn-ghost mt-3 w-full">
             כניסה במצב פיתוח (ללא Google)
           </a>
         )}

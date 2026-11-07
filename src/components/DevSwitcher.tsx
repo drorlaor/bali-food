@@ -23,7 +23,7 @@ export default function DevSwitcher() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email: u.email }),
     });
-    window.location.href = u.role === "parent" ? "/admin" : "/chat";
+    window.location.href = "/chat";
   }
 
   return (

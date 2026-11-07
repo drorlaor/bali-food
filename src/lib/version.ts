@@ -1,3 +1,3 @@
-export const APP_VERSION = "1.3.0";
-export const BUILD_TIME = "2026-11-07 14:15";
-export const VERSION_NOTES = "צ'אט הורים מותאם אישית, מחולל רשימת קניות חכמה, דוח תובנות שימוש של הילדים והמשך שיחות קודמות";
+export const APP_VERSION = "1.3.1";
+export const BUILD_TIME = "2026-11-07 15:05";
+export const VERSION_NOTES = "מסך הכניסה ומסך הבית להורים ולילדים הוא הצ'אט המותאם אישית";
