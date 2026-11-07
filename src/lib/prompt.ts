@@ -1,9 +1,16 @@
 import "server-only";
 import { asc, eq } from "drizzle-orm";
 import { getDb } from "@/db";
-import { childMemoryFacts, childStaticProfiles, systemConfig, type MemoryFact, type User } from "@/db/schema";
+import { childMemoryFacts, childStaticProfiles, systemConfig, users, type MemoryFact, type User } from "@/db/schema";
 import { DEFAULT_PANTRY, GLOBAL_CONFIG_ID, DEFAULT_QUICK_PROMPTS, defaultChildProfile } from "@/db/seed";
 import { PANTRY_LABELS, parseJson, type HouseholdBaselinePantry } from "./types";
+
+export const DEFAULT_PARENT_QUICK_PROMPTS: string[] = [
+  "מה כדאי להכין מחר בבוקר לכריכים לכל הילדים?",
+  "תציע ארוחת צהריים או ערב שמתאימה לטעם של כל הילדים",
+  "הכן רשימת קניות מומלצת לפי מה שהילדים אוהבים ורוצים לנסות",
+  "תן לי תקציר של מה כל ילד אוהב ומה הוא לא אוהב",
+];
 
 export async function loadConfig() {
   const db = getDb();
@@ -11,7 +18,7 @@ export async function loadConfig() {
   return {
     masterSystemPrompt: cfg?.masterSystemPrompt || "",
     baselinePantry: parseJson<HouseholdBaselinePantry>(cfg?.baselinePantryJson, DEFAULT_PANTRY),
-    modelName: cfg?.modelName || "gemini-3.8-flash",
+    modelName: cfg?.modelName || "gemini-3.5-flash",
     quickPrompts: parseJson<string[]>(cfg?.quickPromptsJson, DEFAULT_QUICK_PROMPTS),
     updatedAt: cfg?.updatedAt || null,
     updatedBy: cfg?.updatedBy || null,
@@ -42,11 +49,78 @@ function israelNow(): string {
 export async function buildSystemInstruction(user: User) {
   const db = getDb();
   const config = await loadConfig();
+
+  const pantryLines = (Object.keys(PANTRY_LABELS) as (keyof HouseholdBaselinePantry)[])
+    .map((k) => `- ${PANTRY_LABELS[k]}: ${(config.baselinePantry[k] || []).join(", ") || "-"}`)
+    .join("\n");
+
+  if (user.role === "parent") {
+    const allUsers = await db.select().from(users).where(eq(users.role, "child"));
+    const activeKids = allUsers.filter((u) => u.isActive);
+    const allProfiles = await db.select().from(childStaticProfiles);
+    const allFacts = await db.select().from(childMemoryFacts).orderBy(asc(childMemoryFacts.createdAt));
+
+    const kidsDetails = activeKids.length
+      ? activeKids
+          .map((kid) => {
+            const p = allProfiles.find((pr) => pr.userId === kid.id) || defaultChildProfile();
+            const kidAge = new Date().getFullYear() - p.birthYear;
+            const kidFacts = allFacts.filter((f) => f.userId === kid.id);
+
+            const factsSummary = Object.keys(CATEGORY_TITLES)
+              .map((cat) => {
+                const items = kidFacts.filter((f) => f.category === cat);
+                const list = items.length
+                  ? items.map((f) => `  * (${f.nutritionalGroup}) ${f.itemOrFact}${f.notes ? ` [${f.notes}]` : ""}`).join("\n")
+                  : "  * (אין עדיין)";
+                return `- ${CATEGORY_TITLES[cat]}:\n${list}`;
+              })
+              .join("\n");
+
+            return `### 👧👦 ילד/ה: ${kid.displayName} (גיל ~${kidAge})
+- פרופיל פעילות: ${p.activityProfile}
+- בטיחות במטבח: ${p.kitchenPermissions}
+- דגשים תזונתיים / רפואיים: ${p.medicalOrDietaryNotes}
+- הנחיות מיוחדות: ${p.parentCustomDirectives || "-"}
+${factsSummary}`;
+          })
+          .join("\n\n------------------------------\n\n")
+      : "אין עדיין ילדים מוגדרים במערכת.";
+
+    const parentInstruction = `אתה "בא לי - עוזר תזונה משפחתי להורים", יועץ תזונה וקולינריה אישי, חכם ופרקטי עבור ההורה (${user.displayName}).
+היום והשעה כעת בישראל: ${israelNow()}.
+
+המטרה שלך:
+1. לעזור להורה להחליט מהר ובקלות אילו כריכים לבית הספר, ארוחות צהריים/ערב או נשנושים להכין לילדים, על בסיס היכרות מעמיקה עם ההעדפות, האהבות, הסלידות והאילוצים של כל ילד וילד במשפחה.
+2. להציע פתרונות יצירתיים שמגשרים בין הטעמים השונים של הילדים (למשל ארוחה מרכזית אחת עם התאמות קטנות לכל ילד, או תכנון כריכים לבוקר עם כותרת ברורה לכל ילד).
+3. כשההורה מבקש המלצה לרשימת קניות, לבנות רשימה מסודרת לפי קטגוריות סופר שמשלבת:
+   - פריטים שהילדים ביקשו לנסות (wishlist_to_try) עם ציון שם הילד שביקש.
+   - מרכיבים שהילדים אוהבים במיוחד (liked_ingredient / favorite_meal).
+   - השלמות בריאות למזווה הביתי לפי חוקת התזונה של המשפחה.
+
+==============================
+## חוקת התזונה של הבית
+${config.masterSystemPrompt}
+
+==============================
+## המזווה הקבוע של הבית
+${pantryLines}
+
+==============================
+## פרופילי הילדים והעדפותיהם שנלמדו מהשיחות
+${kidsDetails}
+
+==============================
+הנחיות סגנון:
+- ענה תמיד בעברית קולחת, מסודרת וברורה (השתמש בכותרות ובנקודות עבור כל ילד).
+- פנה אל ההורה בשם ${user.displayName} בגובה העיניים, כשותף לתכנון הבית.`;
+
+    return { instruction: parentInstruction, config };
+  }
+
   const profile =
     (await db.select().from(childStaticProfiles).where(eq(childStaticProfiles.userId, user.id)).get()) ||
-    (user.role === "parent"
-      ? { ...defaultChildProfile(new Date().getFullYear() - 40), activityProfile: "הורה במצב בדיקה", kitchenPermissions: "ללא הגבלה (מבוגר)" }
-      : defaultChildProfile());
+    defaultChildProfile();
   const facts: MemoryFact[] = await db
     .select()
     .from(childMemoryFacts)
@@ -54,10 +128,6 @@ export async function buildSystemInstruction(user: User) {
     .orderBy(asc(childMemoryFacts.createdAt));
 
   const age = new Date().getFullYear() - profile.birthYear;
-
-  const pantryLines = (Object.keys(PANTRY_LABELS) as (keyof HouseholdBaselinePantry)[])
-    .map((k) => `- ${PANTRY_LABELS[k]}: ${(config.baselinePantry[k] || []).join(", ") || "-"}`)
-    .join("\n");
 
   const memoryLines = Object.keys(CATEGORY_TITLES)
     .map((cat) => {

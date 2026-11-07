@@ -215,6 +215,7 @@ export default function ChatApp({ user, quickPrompts }: Props) {
   }
 
   const empty = messages.length === 0 && !loadingSession;
+  const isParent = user.role === "parent";
 
   return (
     <div className="flex h-dvh flex-col">
@@ -225,7 +226,14 @@ export default function ChatApp({ user, quickPrompts }: Props) {
             <img src="/icon.svg" alt="" className="h-9 w-9" />
           </div>
           <div className="min-w-0 flex-1">
-            <div className="text-lg font-extrabold leading-tight brand-text">בא לי</div>
+            <div className="flex items-center gap-2">
+              <span className="text-lg font-extrabold leading-tight brand-text">בא לי</span>
+              {isParent && (
+                <span className="rounded-full bg-mango-100 px-2 py-0.5 text-[11px] font-bold text-mango-800 ring-1 ring-mango-300">
+                  מצב הורים
+                </span>
+              )}
+            </div>
             <div className="truncate text-xs text-stone-500">היי {user.displayName}!</div>
           </div>
           <button id="new-chat-btn" onClick={newChat} className="btn-ghost px-2.5" title="שיחה חדשה">
@@ -242,12 +250,14 @@ export default function ChatApp({ user, quickPrompts }: Props) {
           >
             <History size={18} /> <span className="hidden sm:inline">שיחות קודמות</span>
           </button>
-          <button id="my-profile-btn" onClick={() => setDrawer(true)} className="btn-ghost px-2.5" title="הפרופיל שלי">
-            <UserRound size={18} /> <span className="hidden sm:inline">הפרופיל שלי</span>
-          </button>
-          {user.role === "parent" && (
-            <Link id="admin-link" href="/admin" className="btn-ghost px-2.5" title="ניהול הורים">
-              <ShieldCheck size={18} />
+          {!isParent && (
+            <button id="my-profile-btn" onClick={() => setDrawer(true)} className="btn-ghost px-2.5" title="הפרופיל שלי">
+              <UserRound size={18} /> <span className="hidden sm:inline">הפרופיל שלי</span>
+            </button>
+          )}
+          {isParent && (
+            <Link id="admin-link" href="/admin" className="btn-ghost px-2.5" title="לוח בקרה להורים">
+              <ShieldCheck size={18} /> <span className="hidden sm:inline">לוח הורים</span>
             </Link>
           )}
         </div>
@@ -269,7 +279,11 @@ export default function ChatApp({ user, quickPrompts }: Props) {
               <h1 className="text-2xl font-extrabold">
                 {greeting}, <span className="brand-text">{user.displayName}</span>!
               </h1>
-              <p className="mt-1 text-stone-600">מה בא לך היום? ספר/י לי ונרכיב משהו טעים ומשביע</p>
+              <p className="mt-1 max-w-md text-stone-600">
+                {isParent
+                  ? "אני מכיר את ההעדפות והרצונות של כל הילדים במשפחה. נתכנן יחד כריכים למחר, ארוחות או רשימת קניות?"
+                  : "מה בא לך היום? ספר/י לי ונרכיב משהו טעים ומשביע"}
+              </p>
               <div className="mt-6 flex flex-wrap justify-center gap-2">
                 {quickPrompts.map((q, i) => (
                   <button
@@ -389,7 +403,13 @@ export default function ChatApp({ user, quickPrompts }: Props) {
                 send(input);
               }
             }}
-            placeholder={listening ? "מקשיב..." : "מה בא לך לאכול?"}
+            placeholder={
+              listening
+                ? "מקשיב..."
+                : isParent
+                  ? "שאל/י על כריכים לילדים, רעיונות לארוחה או רשימת קניות..."
+                  : "מה בא לך לאכול?"
+            }
             className="max-h-40 min-h-12 flex-1 resize-none rounded-2xl border border-stone-200 bg-white px-4 py-3 text-[15px] outline-none transition focus:border-mango-400 focus:ring-4 focus:ring-mango-200/60"
           />
           <button
