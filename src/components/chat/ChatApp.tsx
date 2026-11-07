@@ -495,7 +495,7 @@ export default function ChatApp({ user, quickPrompts }: Props) {
           ref={fileInputRef}
           type="file"
           accept="image/*"
-          multiple
+          capture="environment"
           className="hidden"
           onChange={handleFilesSelected}
         />

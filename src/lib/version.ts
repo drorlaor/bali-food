@@ -1,3 +1,3 @@
-export const APP_VERSION = "1.4.0";
-export const BUILD_TIME = "2026-11-07 16:22";
-export const VERSION_NOTES = "חדש! צילום מצרכים מהמקרר או מהשיש (עד 3 תמונות) להמלצות חכמות לכריכים וארוחות";
+export const APP_VERSION = "1.4.1";
+export const BUILD_TIME = "2026-11-07 16:41";
+export const VERSION_NOTES = "פתיחה ישירה של מצלמת הטלפון האחורית בלחיצה על כפתור הצילום";
