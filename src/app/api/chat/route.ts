@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { and, asc, count, desc, eq } from "drizzle-orm";
-import type { Content } from "@google/genai";
+import type { Content, Part } from "@google/genai";
 import { getDb } from "@/db";
 import { chatMessages, chatSessions } from "@/db/schema";
 import { handleError, HttpError, requireUser } from "@/lib/session";
@@ -89,12 +89,43 @@ export async function DELETE(req: Request) {
   }
 }
 
+const DATA_URL_RE = /^data:(image\/(?:jpeg|jpg|png|webp));base64,([A-Za-z0-9+/=]+)$/i;
+const MAX_IMAGES = 3;
+const MAX_BASE64_LEN = 2_000_000; // ~1.5MB per compressed image
+
+function parseImageParts(rawImages: unknown): Part[] {
+  if (!Array.isArray(rawImages)) return [];
+  const parts: Part[] = [];
+  for (const item of rawImages.slice(0, MAX_IMAGES)) {
+    if (typeof item !== "string" || item.length > MAX_BASE64_LEN) continue;
+    const match = item.match(DATA_URL_RE);
+    if (!match) continue;
+    const mimeType = match[1].toLowerCase() === "image/jpg" ? "image/jpeg" : match[1].toLowerCase();
+    parts.push({
+      inlineData: {
+        mimeType,
+        data: match[2],
+      },
+    });
+  }
+  return parts;
+}
+
 export async function POST(req: Request) {
   try {
     const user = await requireUser();
-    const body = (await req.json()) as { sessionId?: string; message?: string };
-    const message = (body.message || "").trim().slice(0, 4000);
-    if (!message) throw new HttpError(400, "Empty message");
+    const body = (await req.json()) as { sessionId?: string; message?: string; images?: string[] };
+    const imageParts = parseImageParts(body.images);
+    const rawText = (body.message || "").trim().slice(0, 4000);
+    const message =
+      rawText ||
+      (imageParts.length > 0 ? "צילמתי מה שיש במקרר/על השיש - מה אפשר להכין מזה?" : "");
+    if (!message && imageParts.length === 0) throw new HttpError(400, "Empty message");
+
+    const storedUserContent =
+      imageParts.length > 0
+        ? `📷 [צילום מצרכים${imageParts.length > 1 ? ` ×${imageParts.length}` : ""}] ${message}`
+        : message;
 
     const db = getDb();
     const now = new Date().toISOString();
@@ -108,7 +139,7 @@ export async function POST(req: Request) {
       await db.insert(chatSessions).values({
         id: sessionId,
         userId: user.id,
-        title: message.slice(0, 60),
+        title: storedUserContent.slice(0, 60),
         createdAt: now,
         updatedAt: now,
       });
@@ -124,7 +155,7 @@ export async function POST(req: Request) {
       id: crypto.randomUUID(),
       sessionId,
       role: "user",
-      content: message,
+      content: storedUserContent,
       createdAt: now,
     });
 
@@ -132,7 +163,9 @@ export async function POST(req: Request) {
       role: m.role === "assistant" ? "model" : "user",
       parts: [{ text: m.content }],
     }));
-    history.push({ role: "user", parts: [{ text: message }] });
+
+    const currentTurnParts: Part[] = [...imageParts, { text: message }];
+    history.push({ role: "user", parts: currentTurnParts });
 
     const { instruction, config } = await buildSystemInstruction(user);
     const assistantMessageId = crypto.randomUUID();
@@ -143,7 +176,7 @@ export async function POST(req: Request) {
       userId: user.id,
       sessionId,
       assistantMessageId,
-      userMessageSnippet: message,
+      userMessageSnippet: storedUserContent,
     });
 
     const doneAt = new Date().toISOString();

@@ -22,11 +22,19 @@ import {
   Sparkles,
   Copy,
   Check,
+  Camera,
 } from "lucide-react";
 import { Markdown, MemoryBadges } from "./Bits";
 import { GROUP_LABELS, type MemoryUpdate } from "@/lib/types";
 
-type Msg = { id: string; role: "user" | "assistant"; content: string; memoryUpdates?: MemoryUpdate[]; error?: boolean };
+type Msg = {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  images?: string[];
+  memoryUpdates?: MemoryUpdate[];
+  error?: boolean;
+};
 type Fact = { id: string; category: string; nutritionalGroup: string; itemOrFact: string; notes: string | null };
 type SessionItem = { id: string; title: string; createdAt: string | null; updatedAt: string | null; messageCount: number };
 
@@ -69,6 +77,44 @@ function formatSessionDate(iso: string | null) {
   }
 }
 
+const MAX_PHOTOS = 3;
+
+async function compressImageFile(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const maxDim = 1024;
+      let { width, height } = img;
+      if (width > maxDim || height > maxDim) {
+        if (width >= height) {
+          height = Math.round((height * maxDim) / width);
+          width = maxDim;
+        } else {
+          width = Math.round((width * maxDim) / height);
+          height = maxDim;
+        }
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        reject(new Error("Canvas not supported"));
+        return;
+      }
+      ctx.drawImage(img, 0, 0, width, height);
+      resolve(canvas.toDataURL("image/jpeg", 0.75));
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("Failed to read image"));
+    };
+    img.src = url;
+  });
+}
+
 export default function ChatApp({ user, quickPrompts }: Props) {
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
@@ -82,9 +128,12 @@ export default function ChatApp({ user, quickPrompts }: Props) {
   const [listening, setListening] = useState(false);
   const [speechOk, setSpeechOk] = useState(false);
   const [greeting, setGreeting] = useState("שלום");
+  const [pendingImages, setPendingImages] = useState<string[]>([]);
+  const [compressingImages, setCompressingImages] = useState(false);
   const recRef = useRef<SpeechRec | null>(null);
   const baseTextRef = useRef("");
   const taRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
 
   const fetchSessions = useCallback(async () => {
@@ -117,18 +166,25 @@ export default function ChatApp({ user, quickPrompts }: Props) {
   }, [input]);
 
   const send = useCallback(
-    async (text: string) => {
+    async (text: string, attachedImages: string[] = []) => {
       const msg = text.trim();
-      if (!msg || loading) return;
+      const imgs = attachedImages.slice(0, MAX_PHOTOS);
+      if ((!msg && imgs.length === 0) || loading) return;
+      const displayMsg =
+        msg || "צילמתי מה שיש במקרר/על השיש - מה אפשר להכין מזה?";
       recRef.current?.stop();
       setInput("");
-      setMessages((m) => [...m, { id: crypto.randomUUID(), role: "user", content: msg }]);
+      setPendingImages([]);
+      setMessages((m) => [
+        ...m,
+        { id: crypto.randomUUID(), role: "user", content: displayMsg, images: imgs.length ? imgs : undefined },
+      ]);
       setLoading(true);
       try {
         const res = await fetch("/api/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ sessionId, message: msg }),
+          body: JSON.stringify({ sessionId, message: displayMsg, images: imgs.length ? imgs : undefined }),
         });
         const raw = await res.text();
         let data: { sessionId?: string; messageId?: string; reply?: string; memoryUpdates?: MemoryUpdate[]; error?: string } = {};
@@ -157,6 +213,33 @@ export default function ChatApp({ user, quickPrompts }: Props) {
     },
     [loading, sessionId, fetchSessions]
   );
+
+  async function handleFilesSelected(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files || []);
+    e.target.value = "";
+    if (!files.length) return;
+    const remainingSlots = MAX_PHOTOS - pendingImages.length;
+    if (remainingSlots <= 0) return;
+
+    setCompressingImages(true);
+    try {
+      const toProcess = files.slice(0, remainingSlots);
+      const compressed = await Promise.all(toProcess.map((f) => compressImageFile(f)));
+      setPendingImages((prev) => [...prev, ...compressed].slice(0, MAX_PHOTOS));
+    } catch {
+      // ignore invalid image file
+    } finally {
+      setCompressingImages(false);
+    }
+  }
+
+  function removePendingImage(idx: number) {
+    setPendingImages((prev) => prev.filter((_, i) => i !== idx));
+  }
+
+  function openPhotoPicker() {
+    fileInputRef.current?.click();
+  }
 
   async function loadSession(id: string) {
     setHistoryOpen(false);
@@ -216,6 +299,7 @@ export default function ChatApp({ user, quickPrompts }: Props) {
     setMessages([]);
     setSessionId(null);
     setInput("");
+    setPendingImages([]);
   }
 
   const empty = messages.length === 0 && !loadingSession;
@@ -298,7 +382,18 @@ export default function ChatApp({ user, quickPrompts }: Props) {
                   ? "אני מכיר את ההעדפות והרצונות של כל הילדים במשפחה. נתכנן יחד כריכים למחר, ארוחות או רשימת קניות?"
                   : "מה בא לך היום? ספר/י לי ונרכיב משהו טעים ומשביע"}
               </p>
-              <div className="mt-6 flex flex-wrap justify-center gap-2">
+              <div className="mt-5">
+                <button
+                  id="welcome-camera-btn"
+                  type="button"
+                  onClick={openPhotoPicker}
+                  className="inline-flex items-center gap-2 rounded-2xl brand-gradient px-5 py-2.5 text-sm font-bold text-white shadow-md shadow-mango-500/25 transition hover:-translate-y-0.5 active:scale-95"
+                >
+                  <Camera size={18} />
+                  📸 מה יש במקרר? צלם/י מצרכים
+                </button>
+              </div>
+              <div className="mt-4 flex flex-wrap justify-center gap-2">
                 {quickPrompts.map((q, i) => (
                   <button
                     key={q}
@@ -350,8 +445,20 @@ export default function ChatApp({ user, quickPrompts }: Props) {
               {messages.map((m) =>
                 m.role === "user" ? (
                   <div key={m.id} className="flex justify-start animate-pop">
-                    <div className="max-w-[85%] whitespace-pre-wrap rounded-3xl rounded-tr-md brand-gradient px-4 py-2.5 text-[15px] text-white shadow-md shadow-mango-500/20">
-                      {m.content}
+                    <div className="max-w-[85%] space-y-2 rounded-3xl rounded-tr-md brand-gradient px-4 py-2.5 text-[15px] text-white shadow-md shadow-mango-500/20">
+                      {m.images && m.images.length > 0 && (
+                        <div className="flex flex-wrap gap-2 pt-0.5">
+                          {m.images.map((src, idx) => (
+                            <img
+                              key={idx}
+                              src={src}
+                              alt={`צילום מצרכים ${idx + 1}`}
+                              className="h-24 w-24 rounded-2xl object-cover ring-2 ring-white/50 sm:h-28 sm:w-28"
+                            />
+                          ))}
+                        </div>
+                      )}
+                      <div className="whitespace-pre-wrap">{m.content}</div>
                     </div>
                   </div>
                 ) : (
@@ -384,13 +491,86 @@ export default function ChatApp({ user, quickPrompts }: Props) {
 
       {/* Input */}
       <footer className="glass border-t border-white/60 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2">
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          multiple
+          className="hidden"
+          onChange={handleFilesSelected}
+        />
+
+        {(pendingImages.length > 0 || compressingImages) && (
+          <div className="mx-auto mb-2 flex max-w-2xl items-center justify-between gap-2 rounded-2xl border border-mango-200 bg-white/90 px-3 py-2 shadow-sm animate-pop">
+            <div className="flex items-center gap-2 overflow-x-auto py-0.5">
+              {pendingImages.map((src, idx) => (
+                <div key={idx} className="relative h-14 w-14 shrink-0">
+                  <img
+                    src={src}
+                    alt={`תמונה ${idx + 1}`}
+                    className="h-14 w-14 rounded-xl object-cover ring-2 ring-mango-300"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removePendingImage(idx)}
+                    title="הסר תמונה"
+                    className="absolute -left-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-stone-900 text-white shadow hover:bg-rose-600"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+              ))}
+              {pendingImages.length < MAX_PHOTOS && !compressingImages && (
+                <button
+                  type="button"
+                  onClick={openPhotoPicker}
+                  title="הוסף תמונה נוספת (עד 3)"
+                  className="flex h-14 w-14 shrink-0 flex-col items-center justify-center rounded-xl border-2 border-dashed border-mango-300 bg-mango-50/50 text-mango-700 transition hover:bg-mango-100/70"
+                >
+                  <Plus size={18} />
+                  <span className="text-[10px] font-bold">{pendingImages.length}/3</span>
+                </button>
+              )}
+              {compressingImages && (
+                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-stone-100">
+                  <div className="h-5 w-5 animate-spin rounded-full border-2 border-mango-300 border-t-mango-600" />
+                </div>
+              )}
+            </div>
+            <div className="text-left text-[11px] font-semibold text-stone-500">
+              <div>{pendingImages.length}/3 תמונות</div>
+              <div className="text-[10px] text-stone-400">אפשר לשלוח מיד או להוסיף שאלה</div>
+            </div>
+          </div>
+        )}
+
         <form
-          className="mx-auto flex max-w-2xl items-end gap-2"
+          className="mx-auto flex max-w-2xl items-end gap-1.5 sm:gap-2"
           onSubmit={(e) => {
             e.preventDefault();
-            send(input);
+            send(input, pendingImages);
           }}
         >
+          <button
+            id="camera-btn"
+            type="button"
+            onClick={openPhotoPicker}
+            disabled={pendingImages.length >= MAX_PHOTOS || compressingImages || loading}
+            title="צלם/י מהמקרר או מהשיש (עד 3 תמונות)"
+            className={`relative flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border transition ${
+              pendingImages.length > 0
+                ? "border-mango-400 bg-mango-50 text-mango-700"
+                : "border-stone-200 bg-white text-stone-600 hover:border-mango-300"
+            } disabled:opacity-40`}
+          >
+            <Camera size={20} />
+            {pendingImages.length > 0 && (
+              <span className="absolute -left-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-mango-500 text-[10px] font-black text-white shadow">
+                {pendingImages.length}
+              </span>
+            )}
+          </button>
+
           {speechOk && (
             <button
               id="mic-btn"
@@ -414,22 +594,24 @@ export default function ChatApp({ user, quickPrompts }: Props) {
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
                 e.preventDefault();
-                send(input);
+                send(input, pendingImages);
               }
             }}
             placeholder={
               listening
                 ? "מקשיב..."
-                : isParent
-                  ? "שאל/י על כריכים לילדים, רעיונות לארוחה או רשימת קניות..."
-                  : "מה בא לך לאכול?"
+                : pendingImages.length > 0
+                  ? "הוסף/י הערה לתמונות או לחץ/י שלח..."
+                  : isParent
+                    ? "שאל/י על כריכים לילדים, רעיונות לארוחה או רשימת קניות..."
+                    : "מה בא לך לאכול?"
             }
             className="max-h-40 min-h-12 flex-1 resize-none rounded-2xl border border-stone-200 bg-white px-4 py-3 text-[15px] outline-none transition focus:border-mango-400 focus:ring-4 focus:ring-mango-200/60"
           />
           <button
             id="send-btn"
             type="submit"
-            disabled={!input.trim() || loading}
+            disabled={(!input.trim() && pendingImages.length === 0) || loading || compressingImages}
             className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl brand-gradient text-white shadow-lg shadow-mango-500/30 transition active:scale-95 disabled:opacity-40"
             title="שלח"
           >
