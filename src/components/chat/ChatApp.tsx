@@ -2,12 +2,30 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Mic, MicOff, Send, Plus, UserRound, ShieldCheck, X, Heart, ThumbsDown, Star, ShoppingBasket, Lightbulb, LogOut } from "lucide-react";
+import {
+  Mic,
+  MicOff,
+  Send,
+  Plus,
+  UserRound,
+  ShieldCheck,
+  X,
+  Heart,
+  ThumbsDown,
+  Star,
+  ShoppingBasket,
+  Lightbulb,
+  LogOut,
+  History,
+  MessageSquare,
+  Trash2,
+} from "lucide-react";
 import { Markdown, MemoryBadges } from "./Bits";
 import { GROUP_LABELS, type MemoryUpdate } from "@/lib/types";
 
 type Msg = { id: string; role: "user" | "assistant"; content: string; memoryUpdates?: MemoryUpdate[]; error?: boolean };
 type Fact = { id: string; category: string; nutritionalGroup: string; itemOrFact: string; notes: string | null };
+type SessionItem = { id: string; title: string; createdAt: string | null; updatedAt: string | null; messageCount: number };
 
 interface Props {
   user: { displayName: string; role: string; avatarUrl: string | null };
@@ -34,12 +52,29 @@ function greetingByTime() {
   return "ערב טוב";
 }
 
+function formatSessionDate(iso: string | null) {
+  if (!iso) return "";
+  try {
+    return new Intl.DateTimeFormat("he-IL", {
+      day: "2-digit",
+      month: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(new Date(iso));
+  } catch {
+    return "";
+  }
+}
+
 export default function ChatApp({ user, quickPrompts }: Props) {
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadingSession, setLoadingSession] = useState(false);
   const [drawer, setDrawer] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [sessions, setSessions] = useState<SessionItem[]>([]);
   const [listening, setListening] = useState(false);
   const [speechOk, setSpeechOk] = useState(false);
   const [greeting, setGreeting] = useState("שלום");
@@ -48,11 +83,23 @@ export default function ChatApp({ user, quickPrompts }: Props) {
   const taRef = useRef<HTMLTextAreaElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
 
+  const fetchSessions = useCallback(async () => {
+    try {
+      const res = await fetch("/api/chat");
+      if (!res.ok) return;
+      const data = await res.json();
+      if (Array.isArray(data.sessions)) setSessions(data.sessions);
+    } catch {
+      // ignore
+    }
+  }, []);
+
   useEffect(() => {
     setGreeting(greetingByTime());
     const w = window as unknown as { SpeechRecognition?: new () => SpeechRec; webkitSpeechRecognition?: new () => SpeechRec };
     setSpeechOk(Boolean(w.SpeechRecognition || w.webkitSpeechRecognition));
-  }, []);
+    fetchSessions();
+  }, [fetchSessions]);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -89,6 +136,7 @@ export default function ChatApp({ user, quickPrompts }: Props) {
         if (!res.ok) throw new Error(data.error || `שגיאה (${res.status})`);
         setSessionId(data.sessionId || null);
         setMessages((m) => [...m, { id: data.messageId || crypto.randomUUID(), role: "assistant", content: data.reply || "", memoryUpdates: data.memoryUpdates }]);
+        fetchSessions();
       } catch (e) {
         setMessages((m) => [
           ...m,
@@ -103,8 +151,37 @@ export default function ChatApp({ user, quickPrompts }: Props) {
         setLoading(false);
       }
     },
-    [loading, sessionId]
+    [loading, sessionId, fetchSessions]
   );
+
+  async function loadSession(id: string) {
+    setHistoryOpen(false);
+    setLoadingSession(true);
+    try {
+      const res = await fetch(`/api/chat?sessionId=${encodeURIComponent(id)}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      setSessionId(id);
+      setMessages(data.messages || []);
+    } catch {
+      // ignore
+    } finally {
+      setLoadingSession(false);
+    }
+  }
+
+  async function deleteSession(id: string, e: React.MouseEvent) {
+    e.stopPropagation();
+    try {
+      await fetch(`/api/chat?sessionId=${encodeURIComponent(id)}`, { method: "DELETE" });
+      setSessions((prev) => prev.filter((s) => s.id !== id));
+      if (sessionId === id) {
+        newChat();
+      }
+    } catch {
+      // ignore
+    }
+  }
 
   function toggleMic() {
     if (listening) {
@@ -137,7 +214,7 @@ export default function ChatApp({ user, quickPrompts }: Props) {
     setInput("");
   }
 
-  const empty = messages.length === 0;
+  const empty = messages.length === 0 && !loadingSession;
 
   return (
     <div className="flex h-dvh flex-col">
@@ -154,6 +231,17 @@ export default function ChatApp({ user, quickPrompts }: Props) {
           <button id="new-chat-btn" onClick={newChat} className="btn-ghost px-2.5" title="שיחה חדשה">
             <Plus size={18} /> <span className="hidden sm:inline">שיחה חדשה</span>
           </button>
+          <button
+            id="history-btn"
+            onClick={() => {
+              fetchSessions();
+              setHistoryOpen(true);
+            }}
+            className="btn-ghost px-2.5"
+            title="שיחות קודמות"
+          >
+            <History size={18} /> <span className="hidden sm:inline">שיחות קודמות</span>
+          </button>
           <button id="my-profile-btn" onClick={() => setDrawer(true)} className="btn-ghost px-2.5" title="הפרופיל שלי">
             <UserRound size={18} /> <span className="hidden sm:inline">הפרופיל שלי</span>
           </button>
@@ -168,8 +256,13 @@ export default function ChatApp({ user, quickPrompts }: Props) {
       {/* Messages */}
       <main className="flex-1 overflow-y-auto px-3">
         <div className="mx-auto max-w-2xl py-4">
-          {empty ? (
-            <div className="flex flex-col items-center pt-8 text-center animate-fade-up">
+          {loadingSession ? (
+            <div className="flex flex-col items-center justify-center py-20 text-stone-400">
+              <div className="h-8 w-8 animate-spin rounded-full border-3 border-mango-200 border-t-mango-500" />
+              <p className="mt-3 text-sm">טוען שיחה...</p>
+            </div>
+          ) : empty ? (
+            <div className="flex flex-col items-center pt-6 text-center animate-fade-up">
               <div className="mb-4 flex h-24 w-24 animate-float items-center justify-center rounded-[30px] brand-gradient shadow-xl shadow-berry-500/30">
                 <img src="/icon.svg" alt="" className="h-20 w-20" />
               </div>
@@ -190,6 +283,39 @@ export default function ChatApp({ user, quickPrompts }: Props) {
                   </button>
                 ))}
               </div>
+
+              {sessions.length > 0 && (
+                <div className="mt-8 w-full max-w-md text-right">
+                  <div className="mb-2 flex items-center justify-between px-1">
+                    <span className="flex items-center gap-1.5 text-xs font-bold text-stone-500">
+                      <History size={14} className="text-mango-500" /> המשך שיחה אחרונה
+                    </span>
+                    {sessions.length > 3 && (
+                      <button
+                        onClick={() => setHistoryOpen(true)}
+                        className="text-xs font-semibold text-mango-600 hover:underline"
+                      >
+                        לכל השיחות ({sessions.length})
+                      </button>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    {sessions.slice(0, 3).map((s) => (
+                      <button
+                        key={s.id}
+                        onClick={() => loadSession(s.id)}
+                        className="flex w-full items-center justify-between gap-3 rounded-2xl border border-stone-200/80 bg-white/80 px-4 py-2.5 text-right shadow-sm transition hover:border-mango-300 hover:bg-white"
+                      >
+                        <div className="flex min-w-0 items-center gap-2.5">
+                          <MessageSquare size={16} className="shrink-0 text-mango-500" />
+                          <span className="truncate text-sm font-medium text-stone-800">{s.title}</span>
+                        </div>
+                        <span className="shrink-0 text-[11px] text-stone-400">{formatSessionDate(s.updatedAt)}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             <div className="space-y-3">
@@ -279,6 +405,107 @@ export default function ChatApp({ user, quickPrompts }: Props) {
       </footer>
 
       <ProfileDrawer open={drawer} onClose={() => setDrawer(false)} name={user.displayName} />
+      <HistoryDrawer
+        open={historyOpen}
+        onClose={() => setHistoryOpen(false)}
+        sessions={sessions}
+        activeId={sessionId}
+        onSelect={loadSession}
+        onDelete={deleteSession}
+        onNewChat={() => {
+          setHistoryOpen(false);
+          newChat();
+        }}
+      />
+    </div>
+  );
+}
+
+function HistoryDrawer({
+  open,
+  onClose,
+  sessions,
+  activeId,
+  onSelect,
+  onDelete,
+  onNewChat,
+}: {
+  open: boolean;
+  onClose: () => void;
+  sessions: SessionItem[];
+  activeId: string | null;
+  onSelect: (id: string) => void;
+  onDelete: (id: string, e: React.MouseEvent) => void;
+  onNewChat: () => void;
+}) {
+  return (
+    <div className={`fixed inset-0 z-50 ${open ? "" : "pointer-events-none"}`} aria-hidden={!open}>
+      <div
+        onClick={onClose}
+        className={`absolute inset-0 bg-stone-900/30 backdrop-blur-sm transition-opacity ${open ? "opacity-100" : "opacity-0"}`}
+      />
+      <aside
+        className={`absolute inset-y-0 right-0 flex w-[88%] max-w-sm flex-col bg-[#fffaf4] shadow-2xl transition-transform duration-300 ${
+          open ? "translate-x-0" : "translate-x-full"
+        }`}
+      >
+        <div className="brand-gradient flex items-center justify-between px-5 pb-5 pt-[max(1.25rem,env(safe-area-inset-top))] text-white">
+          <div>
+            <div className="text-xs opacity-80">היסטוריית שיחות</div>
+            <div className="text-2xl font-extrabold">שיחות קודמות</div>
+          </div>
+          <button id="close-history-btn" onClick={onClose} className="rounded-full bg-white/20 p-2 hover:bg-white/30">
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="p-4 pb-2">
+          <button
+            onClick={onNewChat}
+            className="flex w-full items-center justify-center gap-2 rounded-2xl brand-gradient py-3 text-sm font-bold text-white shadow-md shadow-mango-500/20 transition active:scale-95"
+          >
+            <Plus size={18} /> פתיחת שיחה חדשה
+          </button>
+        </div>
+
+        <div className="flex-1 space-y-2 overflow-y-auto p-4 pt-2">
+          {sessions.length === 0 ? (
+            <div className="py-12 text-center text-sm text-stone-400">
+              <MessageSquare size={32} className="mx-auto mb-2 opacity-40" />
+              עדיין אין שיחות שמורות.
+            </div>
+          ) : (
+            sessions.map((s) => {
+              const isActive = s.id === activeId;
+              return (
+                <div
+                  key={s.id}
+                  onClick={() => onSelect(s.id)}
+                  className={`group flex cursor-pointer items-center justify-between gap-2 rounded-2xl p-3 text-right transition ${
+                    isActive
+                      ? "bg-mango-50 ring-2 ring-mango-400"
+                      : "bg-white ring-1 ring-stone-200/80 hover:ring-mango-300"
+                  }`}
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm font-bold text-stone-800">{s.title}</div>
+                    <div className="mt-0.5 text-xs text-stone-400">
+                      {formatSessionDate(s.updatedAt)} · {s.messageCount} הודעות
+                    </div>
+                  </div>
+                  <button
+                    onClick={(e) => onDelete(s.id, e)}
+                    title="מחק שיחה"
+                    className="rounded-xl p-2 text-stone-400 opacity-70 transition hover:bg-rose-50 hover:text-rose-600 group-hover:opacity-100"
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </aside>
     </div>
   );
 }
