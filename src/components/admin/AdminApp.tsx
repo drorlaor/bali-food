@@ -87,7 +87,7 @@ export default function AdminApp({ me }: { me: { id: string; displayName: string
       </main>
 
       {/* Mobile bottom tabs */}
-      <nav className="glass fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 border-t border-white/60 pb-[env(safe-area-inset-bottom)] md:hidden">
+      <nav className="glass fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 border-t border-white/60 pb-[max(0.35rem,env(safe-area-inset-bottom,0px))] md:hidden">
         {TABS.map((t) => {
           const Icon = t.icon;
           const active = tab === t.key;

@@ -1,8 +1,8 @@
-export const APP_VERSION = "1.5.1";
+export const APP_VERSION = "1.5.2";
 export const FEATURE_RELEASE_ID = "1.5.1";
-export const BUILD_TIME = "2026-11-07 17:46";
+export const BUILD_TIME = "2026-11-07 18:03";
 export const VERSION_NOTES =
-  "חדש! צילום מצרכים מהמקרר או מהשיש (במצלמה או מהגלריה) להמלצות חכמות לכריכים וארוחות";
+  "שיפור פרופורציות תיבת הצ'אט והתאמה לסרגל הניווט התחתון באנדרואיד";
 
 export type WhatsNewAction = "camera" | "history" | "shopping" | "parent_prompt" | "insights";
 

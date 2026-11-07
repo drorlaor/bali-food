@@ -175,8 +175,12 @@ export default function ChatApp({ user, quickPrompts }: Props) {
   useEffect(() => {
     const ta = taRef.current;
     if (!ta) return;
-    ta.style.height = "auto";
-    ta.style.height = Math.min(ta.scrollHeight, 160) + "px";
+    if (!input) {
+      ta.style.height = "44px";
+      return;
+    }
+    ta.style.height = "44px";
+    ta.style.height = Math.min(ta.scrollHeight, 132) + "px";
   }, [input]);
 
   const send = useCallback(
@@ -351,33 +355,33 @@ export default function ChatApp({ user, quickPrompts }: Props) {
   const isParent = user.role === "parent";
 
   return (
-    <div className="flex h-dvh w-full max-w-full flex-col overflow-x-hidden">
+    <div className="fixed inset-0 flex w-full max-w-full flex-col overflow-hidden">
       {/* Top bar */}
-      <header className="glass sticky top-0 z-30 border-b border-white/60 px-3 pb-2 pt-[max(0.5rem,env(safe-area-inset-top))]">
-        <div className="mx-auto flex max-w-2xl items-center gap-1.5 sm:gap-2">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl brand-gradient shadow-md shadow-mango-500/30">
-            <img src="/icon.svg" alt="" className="h-9 w-9" />
+      <header className="glass shrink-0 z-30 border-b border-white/60 px-3 pb-2 pt-[max(0.5rem,env(safe-area-inset-top,0px))]">
+        <div className="mx-auto flex max-w-2xl items-center gap-1 sm:gap-2">
+          <div className="flex h-9 w-9 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-2xl brand-gradient shadow-md shadow-mango-500/30">
+            <img src="/icon.svg" alt="" className="h-8 w-8 sm:h-9 sm:w-9" />
           </div>
-          <div className="min-w-0 flex-1">
+          <div className="min-w-0 flex-1 pr-0.5">
             <div className="flex items-center gap-1.5">
-              <span className="truncate text-lg font-extrabold leading-tight brand-text">בא לי</span>
+              <span className="text-base sm:text-lg font-extrabold leading-tight brand-text">בא לי</span>
               {isParent && (
-                <span className="shrink-0 rounded-full bg-mango-100 px-2 py-0.5 text-[10px] font-bold text-mango-800 ring-1 ring-mango-300">
-                  מצב הורים
+                <span className="shrink-0 rounded-full bg-mango-100 px-1.5 py-0.5 text-[10px] font-bold text-mango-800 ring-1 ring-mango-300">
+                  הורים
                 </span>
               )}
             </div>
-            <div className="truncate text-xs text-stone-500">היי {user.displayName}!</div>
+            <div className="truncate text-[11px] sm:text-xs text-stone-500">היי {user.displayName}!</div>
           </div>
           <button
             id="whats-new-btn"
             onClick={() => setWhatsNewOpen(true)}
-            className="btn-ghost shrink-0 px-2 py-1.5 text-mango-600 sm:px-2.5 sm:py-2"
+            className="btn-ghost shrink-0 p-2 text-mango-600 sm:px-2.5 sm:py-2"
             title="מה חדש בבא לי?"
           >
             <Sparkles size={18} />
           </button>
-          <button id="new-chat-btn" onClick={newChat} className="btn-ghost shrink-0 px-2 py-1.5 sm:px-2.5 sm:py-2" title="שיחה חדשה">
+          <button id="new-chat-btn" onClick={newChat} className="btn-ghost shrink-0 p-2 sm:px-2.5 sm:py-2" title="שיחה חדשה">
             <Plus size={18} /> <span className="hidden sm:inline">שיחה חדשה</span>
           </button>
           <button
@@ -386,13 +390,13 @@ export default function ChatApp({ user, quickPrompts }: Props) {
               fetchSessions();
               setHistoryOpen(true);
             }}
-            className="btn-ghost shrink-0 px-2 py-1.5 sm:px-2.5 sm:py-2"
+            className="btn-ghost shrink-0 p-2 sm:px-2.5 sm:py-2"
             title="שיחות קודמות"
           >
             <History size={18} /> <span className="hidden sm:inline">שיחות קודמות</span>
           </button>
           {!isParent && (
-            <button id="my-profile-btn" onClick={() => setDrawer(true)} className="btn-ghost shrink-0 px-2 py-1.5 sm:px-2.5 sm:py-2" title="הפרופיל שלי">
+            <button id="my-profile-btn" onClick={() => setDrawer(true)} className="btn-ghost shrink-0 p-2 sm:px-2.5 sm:py-2" title="הפרופיל שלי">
               <UserRound size={18} /> <span className="hidden sm:inline">הפרופיל שלי</span>
             </button>
           )}
@@ -401,12 +405,12 @@ export default function ChatApp({ user, quickPrompts }: Props) {
               <button
                 id="shopping-list-btn"
                 onClick={() => setShoppingOpen(true)}
-                className="btn-ghost shrink-0 px-2 py-1.5 sm:px-2.5 sm:py-2"
+                className="btn-ghost shrink-0 p-2 sm:px-2.5 sm:py-2"
                 title="רשימת קניות מומלצת"
               >
                 <ShoppingBasket size={18} className="text-leaf-600" /> <span className="hidden sm:inline">רשימת קניות</span>
               </button>
-              <Link id="admin-link" href="/admin" className="btn-ghost shrink-0 px-2 py-1.5 sm:px-2.5 sm:py-2" title="לוח בקרה להורים">
+              <Link id="admin-link" href="/admin" className="btn-ghost shrink-0 p-2 sm:px-2.5 sm:py-2" title="לוח בקרה להורים">
                 <ShieldCheck size={18} /> <span className="hidden sm:inline">לוח הורים</span>
               </Link>
             </>
@@ -543,7 +547,7 @@ export default function ChatApp({ user, quickPrompts }: Props) {
       </main>
 
       {/* Input */}
-      <footer className="glass relative border-t border-white/60 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2">
+      <footer className="glass relative shrink-0 border-t border-white/60 px-3 pt-2.5 pb-[calc(0.875rem+env(safe-area-inset-bottom,0px))]">
         <input
           ref={cameraInputRef}
           type="file"
@@ -659,13 +663,13 @@ export default function ChatApp({ user, quickPrompts }: Props) {
             onClick={() => setPhotoMenuOpen((o) => !o)}
             disabled={pendingImages.length >= MAX_PHOTOS || compressingImages || loading}
             title="צלם/י במצלמה או בחר/י מהגלריה (עד 3 תמונות)"
-            className={`relative flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border transition ${
+            className={`relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border transition ${
               pendingImages.length > 0 || photoMenuOpen
                 ? "border-mango-400 bg-mango-50 text-mango-700"
                 : "border-stone-200 bg-white text-stone-600 hover:border-mango-300"
             } disabled:opacity-40`}
           >
-            <Camera size={20} />
+            <Camera size={19} />
             {pendingImages.length > 0 && (
               <span className="absolute -left-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-mango-500 text-[10px] font-black text-white shadow">
                 {pendingImages.length}
@@ -679,11 +683,11 @@ export default function ChatApp({ user, quickPrompts }: Props) {
               type="button"
               onClick={toggleMic}
               title={listening ? "עצור הקלטה" : "דבר/י אליי"}
-              className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl transition ${
+              className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl transition ${
                 listening ? "animate-pulse bg-rose-500 text-white shadow-lg shadow-rose-500/40" : "border border-stone-200 bg-white text-stone-600 hover:border-mango-300"
               }`}
             >
-              {listening ? <MicOff size={20} /> : <Mic size={20} />}
+              {listening ? <MicOff size={19} /> : <Mic size={19} />}
             </button>
           )}
           <textarea
@@ -703,21 +707,21 @@ export default function ChatApp({ user, quickPrompts }: Props) {
               listening
                 ? "מקשיב..."
                 : pendingImages.length > 0
-                  ? "הוסף/י הערה לתמונות או לחץ/י שלח..."
+                  ? "הוסף/י שאלה או לחץ/י שלח..."
                   : isParent
-                    ? "שאל/י על כריכים לילדים, רעיונות לארוחה או רשימת קניות..."
+                    ? "כריכים, ארוחות או רשימת קניות..."
                     : "מה בא לך לאכול?"
             }
-            className="max-h-40 min-h-12 flex-1 resize-none rounded-2xl border border-stone-200 bg-white px-4 py-3 text-[15px] outline-none transition focus:border-mango-400 focus:ring-4 focus:ring-mango-200/60"
+            className="max-h-[132px] min-h-[44px] h-[44px] min-w-0 flex-1 resize-none overflow-y-auto rounded-2xl border border-stone-200 bg-white px-3.5 py-2.5 text-[15px] leading-6 outline-none transition focus:border-mango-400 focus:ring-4 focus:ring-mango-200/60"
           />
           <button
             id="send-btn"
             type="submit"
             disabled={(!input.trim() && pendingImages.length === 0) || loading || compressingImages}
-            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl brand-gradient text-white shadow-lg shadow-mango-500/30 transition active:scale-95 disabled:opacity-40"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl brand-gradient text-white shadow-lg shadow-mango-500/30 transition active:scale-95 disabled:opacity-40"
             title="שלח"
           >
-            <Send size={20} className="-scale-x-100" />
+            <Send size={19} className="-scale-x-100" />
           </button>
         </form>
       </footer>
