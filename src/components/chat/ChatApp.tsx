@@ -23,6 +23,7 @@ import {
   Copy,
   Check,
   Camera,
+  Image as ImageIcon,
 } from "lucide-react";
 import { Markdown, MemoryBadges } from "./Bits";
 import { GROUP_LABELS, type MemoryUpdate } from "@/lib/types";
@@ -130,10 +131,12 @@ export default function ChatApp({ user, quickPrompts }: Props) {
   const [greeting, setGreeting] = useState("שלום");
   const [pendingImages, setPendingImages] = useState<string[]>([]);
   const [compressingImages, setCompressingImages] = useState(false);
+  const [photoMenuOpen, setPhotoMenuOpen] = useState(false);
   const recRef = useRef<SpeechRec | null>(null);
   const baseTextRef = useRef("");
   const taRef = useRef<HTMLTextAreaElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
 
   const fetchSessions = useCallback(async () => {
@@ -237,8 +240,14 @@ export default function ChatApp({ user, quickPrompts }: Props) {
     setPendingImages((prev) => prev.filter((_, i) => i !== idx));
   }
 
-  function openPhotoPicker() {
-    fileInputRef.current?.click();
+  function openCamera() {
+    setPhotoMenuOpen(false);
+    cameraInputRef.current?.click();
+  }
+
+  function openGallery() {
+    setPhotoMenuOpen(false);
+    galleryInputRef.current?.click();
   }
 
   async function loadSession(id: string) {
@@ -386,7 +395,7 @@ export default function ChatApp({ user, quickPrompts }: Props) {
                 <button
                   id="welcome-camera-btn"
                   type="button"
-                  onClick={openPhotoPicker}
+                  onClick={openCamera}
                   className="inline-flex items-center gap-2 rounded-2xl brand-gradient px-5 py-2.5 text-sm font-bold text-white shadow-md shadow-mango-500/25 transition hover:-translate-y-0.5 active:scale-95"
                 >
                   <Camera size={18} />
@@ -490,15 +499,64 @@ export default function ChatApp({ user, quickPrompts }: Props) {
       </main>
 
       {/* Input */}
-      <footer className="glass border-t border-white/60 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2">
+      <footer className="glass relative border-t border-white/60 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2">
         <input
-          ref={fileInputRef}
+          ref={cameraInputRef}
           type="file"
           accept="image/*"
           capture="environment"
           className="hidden"
           onChange={handleFilesSelected}
         />
+        <input
+          ref={galleryInputRef}
+          type="file"
+          accept="image/*"
+          multiple
+          className="hidden"
+          onChange={handleFilesSelected}
+        />
+
+        {photoMenuOpen && (
+          <>
+            <div
+              className="fixed inset-0 z-40"
+              onClick={() => setPhotoMenuOpen(false)}
+            />
+            <div className="mx-auto max-w-2xl">
+              <div className="relative z-50 mb-2 inline-flex flex-col gap-1 rounded-2xl border border-mango-200 bg-white p-1.5 shadow-xl animate-pop">
+                <button
+                  id="menu-open-camera-btn"
+                  type="button"
+                  onClick={openCamera}
+                  className="flex items-center gap-2.5 rounded-xl px-3.5 py-2.5 text-right text-sm font-bold text-stone-800 transition hover:bg-mango-50 active:scale-95"
+                >
+                  <span className="flex h-8 w-8 items-center justify-center rounded-xl brand-gradient text-white shadow-sm">
+                    <Camera size={16} />
+                  </span>
+                  <div>
+                    <div>צילום במצלמה</div>
+                    <div className="text-[11px] font-normal text-stone-400">פתיחה ישירה של המצלמה</div>
+                  </div>
+                </button>
+                <button
+                  id="menu-open-gallery-btn"
+                  type="button"
+                  onClick={openGallery}
+                  className="flex items-center gap-2.5 rounded-xl px-3.5 py-2.5 text-right text-sm font-bold text-stone-800 transition hover:bg-mango-50 active:scale-95"
+                >
+                  <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-stone-100 text-stone-700">
+                    <ImageIcon size={16} />
+                  </span>
+                  <div>
+                    <div>בחירה מהגלריה</div>
+                    <div className="text-[11px] font-normal text-stone-400">בחירת עד {MAX_PHOTOS - pendingImages.length} תמונות מהמכשיר</div>
+                  </div>
+                </button>
+              </div>
+            </div>
+          </>
+        )}
 
         {(pendingImages.length > 0 || compressingImages) && (
           <div className="mx-auto mb-2 flex max-w-2xl items-center justify-between gap-2 rounded-2xl border border-mango-200 bg-white/90 px-3 py-2 shadow-sm animate-pop">
@@ -523,7 +581,7 @@ export default function ChatApp({ user, quickPrompts }: Props) {
               {pendingImages.length < MAX_PHOTOS && !compressingImages && (
                 <button
                   type="button"
-                  onClick={openPhotoPicker}
+                  onClick={() => setPhotoMenuOpen((o) => !o)}
                   title="הוסף תמונה נוספת (עד 3)"
                   className="flex h-14 w-14 shrink-0 flex-col items-center justify-center rounded-xl border-2 border-dashed border-mango-300 bg-mango-50/50 text-mango-700 transition hover:bg-mango-100/70"
                 >
@@ -554,11 +612,11 @@ export default function ChatApp({ user, quickPrompts }: Props) {
           <button
             id="camera-btn"
             type="button"
-            onClick={openPhotoPicker}
+            onClick={() => setPhotoMenuOpen((o) => !o)}
             disabled={pendingImages.length >= MAX_PHOTOS || compressingImages || loading}
-            title="צלם/י מהמקרר או מהשיש (עד 3 תמונות)"
+            title="צלם/י במצלמה או בחר/י מהגלריה (עד 3 תמונות)"
             className={`relative flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border transition ${
-              pendingImages.length > 0
+              pendingImages.length > 0 || photoMenuOpen
                 ? "border-mango-400 bg-mango-50 text-mango-700"
                 : "border-stone-200 bg-white text-stone-600 hover:border-mango-300"
             } disabled:opacity-40`}
