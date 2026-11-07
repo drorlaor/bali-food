@@ -19,6 +19,9 @@ import {
   History,
   MessageSquare,
   Trash2,
+  Sparkles,
+  Copy,
+  Check,
 } from "lucide-react";
 import { Markdown, MemoryBadges } from "./Bits";
 import { GROUP_LABELS, type MemoryUpdate } from "@/lib/types";
@@ -74,6 +77,7 @@ export default function ChatApp({ user, quickPrompts }: Props) {
   const [loadingSession, setLoadingSession] = useState(false);
   const [drawer, setDrawer] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [shoppingOpen, setShoppingOpen] = useState(false);
   const [sessions, setSessions] = useState<SessionItem[]>([]);
   const [listening, setListening] = useState(false);
   const [speechOk, setSpeechOk] = useState(false);
@@ -256,9 +260,19 @@ export default function ChatApp({ user, quickPrompts }: Props) {
             </button>
           )}
           {isParent && (
-            <Link id="admin-link" href="/admin" className="btn-ghost px-2.5" title="לוח בקרה להורים">
-              <ShieldCheck size={18} /> <span className="hidden sm:inline">לוח הורים</span>
-            </Link>
+            <>
+              <button
+                id="shopping-list-btn"
+                onClick={() => setShoppingOpen(true)}
+                className="btn-ghost px-2.5"
+                title="רשימת קניות מומלצת"
+              >
+                <ShoppingBasket size={18} className="text-leaf-600" /> <span className="hidden sm:inline">רשימת קניות</span>
+              </button>
+              <Link id="admin-link" href="/admin" className="btn-ghost px-2.5" title="לוח בקרה להורים">
+                <ShieldCheck size={18} /> <span className="hidden sm:inline">לוח הורים</span>
+              </Link>
+            </>
           )}
         </div>
       </header>
@@ -425,6 +439,7 @@ export default function ChatApp({ user, quickPrompts }: Props) {
       </footer>
 
       <ProfileDrawer open={drawer} onClose={() => setDrawer(false)} name={user.displayName} />
+      {isParent && <ShoppingListDrawer open={shoppingOpen} onClose={() => setShoppingOpen(false)} />}
       <HistoryDrawer
         open={historyOpen}
         onClose={() => setHistoryOpen(false)}
@@ -437,6 +452,165 @@ export default function ChatApp({ user, quickPrompts }: Props) {
           newChat();
         }}
       />
+    </div>
+  );
+}
+
+interface ShoppingItemRow {
+  id: string;
+  childId: string;
+  childName: string;
+  item: string;
+  notes: string | null;
+  groupLabel: string;
+}
+
+function ShoppingListDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const [wishlist, setWishlist] = useState<ShoppingItemRow[] | null>(null);
+  const [liked, setLiked] = useState<ShoppingItemRow[] | null>(null);
+  const [recommendation, setRecommendation] = useState<string>("");
+  const [generating, setGenerating] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    fetch("/api/admin/shopping-list")
+      .then((r) => r.json())
+      .then((d) => {
+        setWishlist(d.wishlist || []);
+        setLiked(d.liked || []);
+      })
+      .catch(() => {
+        setWishlist([]);
+        setLiked([]);
+      });
+  }, [open]);
+
+  async function generateAiList() {
+    setGenerating(true);
+    try {
+      const res = await fetch("/api/admin/shopping-list", { method: "POST" });
+      const data = await res.json();
+      if (data.recommendation) setRecommendation(data.recommendation);
+    } catch {
+      setRecommendation("שגיאה ביצירת ההמלצה, נסו שוב.");
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  function copyToClipboard(text: string) {
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2500);
+  }
+
+  return (
+    <div className={`fixed inset-0 z-50 ${open ? "" : "pointer-events-none"}`} aria-hidden={!open}>
+      <div
+        onClick={onClose}
+        className={`absolute inset-0 bg-stone-900/30 backdrop-blur-sm transition-opacity ${open ? "opacity-100" : "opacity-0"}`}
+      />
+      <aside
+        className={`absolute inset-y-0 right-0 flex w-[92%] max-w-md flex-col bg-[#fffaf4] shadow-2xl transition-transform duration-300 ${
+          open ? "translate-x-0" : "translate-x-full"
+        }`}
+      >
+        <div className="brand-gradient flex items-center justify-between px-5 pb-5 pt-[max(1.25rem,env(safe-area-inset-top))] text-white">
+          <div>
+            <div className="text-xs opacity-80">מותאם לבקשות והעדפות הילדים</div>
+            <div className="text-2xl font-extrabold">רשימת קניות חכמה</div>
+          </div>
+          <button id="close-shopping-btn" onClick={onClose} className="rounded-full bg-white/20 p-2 hover:bg-white/30">
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="flex-1 space-y-4 overflow-y-auto p-4">
+          <button
+            id="generate-ai-shopping-btn"
+            onClick={generateAiList}
+            disabled={generating}
+            className="flex w-full items-center justify-center gap-2 rounded-2xl brand-gradient py-3.5 text-sm font-bold text-white shadow-lg shadow-mango-500/25 transition active:scale-95 disabled:opacity-60"
+          >
+            <Sparkles size={18} className={generating ? "animate-spin" : ""} />
+            {generating ? "בונה רשימת קניות מותאמת..." : "הפק המלצת קניות שבועית חכמה (AI)"}
+          </button>
+
+          {recommendation && (
+            <section className="card border-2 border-mango-300 bg-white space-y-3">
+              <div className="flex items-center justify-between border-b border-stone-100 pb-2">
+                <h3 className="flex items-center gap-1.5 font-extrabold text-stone-800">
+                  <Sparkles size={16} className="text-mango-500" /> המלצת ה-AI לקניות השבוע
+                </h3>
+                <button
+                  onClick={() => copyToClipboard(recommendation)}
+                  className="flex items-center gap-1 rounded-xl bg-mango-100 px-3 py-1.5 text-xs font-bold text-mango-800 transition hover:bg-mango-200"
+                >
+                  {copied ? <Check size={14} /> : <Copy size={14} />}
+                  {copied ? "הועתק!" : "העתק לוואטסאפ"}
+                </button>
+              </div>
+              <div className="text-sm leading-relaxed">
+                <Markdown>{recommendation}</Markdown>
+              </div>
+            </section>
+          )}
+
+          <section className="card space-y-2.5">
+            <h3 className="flex items-center gap-2 font-bold text-stone-800">
+              <ShoppingBasket size={18} className="text-leaf-600" />
+              דברים שהילדים ביקשו לנסות ({wishlist?.length || 0})
+            </h3>
+            {wishlist === null ? (
+              <div className="h-16 animate-pulse rounded-2xl bg-stone-100" />
+            ) : wishlist.length === 0 ? (
+              <p className="text-xs text-stone-400">הילדים עוד לא ביקשו פריטים חדשים לנסות בשיחות.</p>
+            ) : (
+              <div className="space-y-1.5">
+                {wishlist.map((w) => (
+                  <div
+                    key={w.id}
+                    className="flex items-center justify-between gap-2 rounded-xl bg-white px-3 py-2 text-sm ring-1 ring-stone-200/80"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <span className="font-semibold text-stone-800">{w.item}</span>
+                      {w.notes && <span className="mr-1 text-xs text-stone-400">({w.notes})</span>}
+                    </div>
+                    <span className="shrink-0 rounded-full bg-leaf-50 px-2.5 py-0.5 text-xs font-bold text-leaf-700 ring-1 ring-leaf-200">
+                      {w.childName}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+
+          <section className="card space-y-2.5">
+            <h3 className="flex items-center gap-2 font-bold text-stone-800">
+              <Heart size={18} className="text-berry-500" />
+              מרכיבים וארוחות שהילדים אוהבים ({liked?.length || 0})
+            </h3>
+            {liked === null ? (
+              <div className="h-16 animate-pulse rounded-2xl bg-stone-100" />
+            ) : liked.length === 0 ? (
+              <p className="text-xs text-stone-400">עוד לא נרשמו מרכיבים אהובים.</p>
+            ) : (
+              <div className="flex flex-wrap gap-1.5">
+                {liked.map((l) => (
+                  <span
+                    key={l.id}
+                    className="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1 text-xs font-medium text-stone-700 ring-1 ring-stone-200"
+                  >
+                    {l.item}
+                    <strong className="text-mango-600">({l.childName})</strong>
+                  </span>
+                ))}
+              </div>
+            )}
+          </section>
+        </div>
+      </aside>
     </div>
   );
 }
