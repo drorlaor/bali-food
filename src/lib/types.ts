@@ -42,6 +42,20 @@ export interface MemoryUpdate {
   error?: string;
 }
 
+export interface SafetyMitigationOption {
+  id: string;
+  label: string;
+  prompt?: string;
+  action?: "prefill_last" | "open_admin_children";
+}
+
+export interface SafetyLimitationInfo {
+  kind: "kitchen_safety" | "ai_filter";
+  title: string;
+  reasons: string[];
+  mitigations: SafetyMitigationOption[];
+}
+
 export function memoryUpdateLabel(u: MemoryUpdate): string {
   if (u.action === "save_child_preference") {
     return `נשמר בפרופיל: ${CATEGORY_LABELS[u.category || ""] || ""} ${u.itemOrFact || ""}`.trim();

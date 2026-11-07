@@ -169,7 +169,7 @@ export async function POST(req: Request) {
 
     const { instruction, config } = await buildSystemInstruction(user);
     const assistantMessageId = crypto.randomUUID();
-    const { text, memoryUpdates } = await runChatTurn({
+    const { text, memoryUpdates, safetyLimitation } = await runChatTurn({
       model: config.modelName,
       systemInstruction: instruction,
       history,
@@ -190,7 +190,7 @@ export async function POST(req: Request) {
     });
     await db.update(chatSessions).set({ updatedAt: doneAt }).where(eq(chatSessions.id, sessionId));
 
-    return NextResponse.json({ sessionId, messageId: assistantMessageId, reply: text, memoryUpdates });
+    return NextResponse.json({ sessionId, messageId: assistantMessageId, reply: text, memoryUpdates, safetyLimitation });
   } catch (err) {
     return handleError(err);
   }

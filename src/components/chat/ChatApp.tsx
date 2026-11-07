@@ -24,9 +24,10 @@ import {
   Check,
   Camera,
   Image as ImageIcon,
+  ShieldAlert,
 } from "lucide-react";
 import { Markdown, MemoryBadges } from "./Bits";
-import { GROUP_LABELS, type MemoryUpdate } from "@/lib/types";
+import { GROUP_LABELS, type MemoryUpdate, type SafetyLimitationInfo, type SafetyMitigationOption } from "@/lib/types";
 import { APP_VERSION, FEATURE_RELEASE_ID, WHATS_NEW_ITEMS, type WhatsNewAction } from "@/lib/version";
 
 type Msg = {
@@ -35,6 +36,7 @@ type Msg = {
   content: string;
   images?: string[];
   memoryUpdates?: MemoryUpdate[];
+  safetyLimitation?: SafetyLimitationInfo;
   error?: boolean;
 };
 type Fact = { id: string; category: string; nutritionalGroup: string; itemOrFact: string; notes: string | null };
@@ -136,6 +138,7 @@ export default function ChatApp({ user, quickPrompts }: Props) {
   const [whatsNewOpen, setWhatsNewOpen] = useState(false);
   const recRef = useRef<SpeechRec | null>(null);
   const baseTextRef = useRef("");
+  const lastUserTextRef = useRef("");
   const taRef = useRef<HTMLTextAreaElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
@@ -190,6 +193,7 @@ export default function ChatApp({ user, quickPrompts }: Props) {
       if ((!msg && imgs.length === 0) || loading) return;
       const displayMsg =
         msg || "צילמתי מה שיש במקרר/על השיש - מה אפשר להכין מזה?";
+      lastUserTextRef.current = displayMsg;
       recRef.current?.stop();
       setInput("");
       setPendingImages([]);
@@ -205,7 +209,14 @@ export default function ChatApp({ user, quickPrompts }: Props) {
           body: JSON.stringify({ sessionId, message: displayMsg, images: imgs.length ? imgs : undefined }),
         });
         const raw = await res.text();
-        let data: { sessionId?: string; messageId?: string; reply?: string; memoryUpdates?: MemoryUpdate[]; error?: string } = {};
+        let data: {
+          sessionId?: string;
+          messageId?: string;
+          reply?: string;
+          memoryUpdates?: MemoryUpdate[];
+          safetyLimitation?: SafetyLimitationInfo;
+          error?: string;
+        } = {};
         try {
           data = JSON.parse(raw);
         } catch {
@@ -213,7 +224,16 @@ export default function ChatApp({ user, quickPrompts }: Props) {
         }
         if (!res.ok) throw new Error(data.error || `שגיאה (${res.status})`);
         setSessionId(data.sessionId || null);
-        setMessages((m) => [...m, { id: data.messageId || crypto.randomUUID(), role: "assistant", content: data.reply || "", memoryUpdates: data.memoryUpdates }]);
+        setMessages((m) => [
+          ...m,
+          {
+            id: data.messageId || crypto.randomUUID(),
+            role: "assistant",
+            content: data.reply || "",
+            memoryUpdates: data.memoryUpdates,
+            safetyLimitation: data.safetyLimitation,
+          },
+        ]);
         fetchSessions();
       } catch (e) {
         setMessages((m) => [
@@ -263,6 +283,17 @@ export default function ChatApp({ user, quickPrompts }: Props) {
   function openGallery() {
     setPhotoMenuOpen(false);
     galleryInputRef.current?.click();
+  }
+
+  function handleSafetyMitigation(opt: SafetyMitigationOption) {
+    if (opt.prompt) {
+      send(opt.prompt);
+    } else if (opt.action === "prefill_last") {
+      setInput(lastUserTextRef.current || "");
+      setTimeout(() => taRef.current?.focus(), 50);
+    } else if (opt.action === "open_admin_children") {
+      window.location.href = "/admin?tab=children";
+    }
   }
 
   function closeWhatsNew() {
@@ -527,6 +558,13 @@ export default function ChatApp({ user, quickPrompts }: Props) {
                     >
                       <Markdown>{m.content}</Markdown>
                     </div>
+                    {m.safetyLimitation && (
+                      <SafetyMitigationCard
+                        info={m.safetyLimitation}
+                        isParent={isParent}
+                        onMitigate={handleSafetyMitigation}
+                      />
+                    )}
                     {m.memoryUpdates && <MemoryBadges updates={m.memoryUpdates} />}
                   </div>
                 )
@@ -747,6 +785,60 @@ export default function ChatApp({ user, quickPrompts }: Props) {
         isParent={isParent}
         displayName={user.displayName}
       />
+    </div>
+  );
+}
+
+function SafetyMitigationCard({
+  info,
+  isParent,
+  onMitigate,
+}: {
+  info: SafetyLimitationInfo;
+  isParent: boolean;
+  onMitigate: (opt: SafetyMitigationOption) => void;
+}) {
+  const visibleMitigations = info.mitigations.filter(
+    (opt) => opt.action !== "open_admin_children" || isParent
+  );
+
+  return (
+    <div
+      dir="rtl"
+      className="mt-2 w-full max-w-[90%] rounded-2xl border border-amber-300 bg-amber-50/95 p-3.5 text-right shadow-sm animate-pop"
+    >
+      <div className="flex items-start gap-2">
+        <ShieldAlert size={18} className="mt-0.5 shrink-0 text-amber-600" />
+        <div className="min-w-0 flex-1">
+          <div className="text-xs font-extrabold text-amber-950">{info.title}</div>
+          <ul className="mt-1 space-y-1 text-xs text-amber-900/90">
+            {info.reasons.map((r, i) => (
+              <li key={i} className="flex items-start gap-1.5">
+                <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" />
+                <span>{r}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+
+      <div className="mt-3 border-t border-amber-200/80 pt-2.5">
+        <div className="mb-1.5 text-[11px] font-bold text-amber-900">
+          איך תרצו להתקדם? בחרו אפשרות לפתרון:
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {visibleMitigations.map((opt) => (
+            <button
+              key={opt.id}
+              type="button"
+              onClick={() => onMitigate(opt)}
+              className="rounded-xl border border-amber-300 bg-white px-3 py-1.5 text-xs font-bold text-stone-800 shadow-xs transition hover:border-mango-400 hover:bg-mango-50 active:scale-95"
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

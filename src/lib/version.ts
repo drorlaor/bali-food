@@ -1,8 +1,8 @@
-export const APP_VERSION = "1.5.2";
+export const APP_VERSION = "1.5.3";
 export const FEATURE_RELEASE_ID = "1.5.1";
-export const BUILD_TIME = "2026-11-07 18:03";
+export const BUILD_TIME = "2026-11-07 18:40";
 export const VERSION_NOTES =
-  "שיפור פרופורציות תיבת הצ'אט והתאמה לסרגל הניווט התחתון באנדרואיד";
+  "הצגת סיבות מפורטות ואפשרויות פתרון בלחיצה אחת במקרה של מגבלות בטיחות";
 
 export type WhatsNewAction = "camera" | "history" | "shopping" | "parent_prompt" | "insights";
 

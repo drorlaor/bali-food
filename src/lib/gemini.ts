@@ -1,11 +1,19 @@
 import "server-only";
 import dns from "node:dns";
 try { dns.setDefaultResultOrder?.("ipv4first"); } catch {}
-import { GoogleGenAI, Type, type Content, type FunctionDeclaration, type Part } from "@google/genai";
+import {
+  GoogleGenAI,
+  HarmBlockThreshold,
+  HarmCategory,
+  Type,
+  type Content,
+  type FunctionDeclaration,
+  type Part,
+} from "@google/genai";
 import { and, eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { childMemoryFacts, aiErrorLogs, MEMORY_CATEGORIES, NUTRITIONAL_GROUPS, type MemoryCategory, type NutritionalGroup } from "@/db/schema";
-import type { MemoryUpdate } from "./types";
+import type { MemoryUpdate, SafetyLimitationInfo } from "./types";
 
 export const TOOL_DECLARATIONS: FunctionDeclaration[] = [
   {
@@ -139,6 +147,86 @@ async function executeTool(
   return { action: name as MemoryUpdate["action"], factId: "", success: false, error: "unknown tool" };
 }
 
+const HARM_CATEGORY_HEBREW: Record<string, string> = {
+  HARM_CATEGORY_DANGEROUS_CONTENT: "זיהוי פריט או פעולה שעלולים להיות מסוכנים (כמו סכין חדה, אש גלויה או חום גבוה במטבח)",
+  HARM_CATEGORY_IMAGE_DANGEROUS_CONTENT: "זיהוי חפץ חד או מכשיר חם בתמונה שצולמה",
+  HARM_CATEGORY_HARASSMENT: "זיהוי ביטוי שנתפס כפוגעני על ידי מסנן השפה",
+  HARM_CATEGORY_HATE_SPEECH: "זיהוי שפה לא הולמת על ידי מסנן הבטיחות",
+  HARM_CATEGORY_SEXUALLY_EXPLICIT: "סינון תוכן אוטומטי לצורכי בטיחות ילדים",
+  HARM_CATEGORY_IMAGE_SEXUALLY_EXPLICIT: "סינון תמונה אוטומטי לצורכי בטיחות",
+};
+
+const FINISH_REASON_HEBREW: Record<string, string> = {
+  SAFETY: "מסנן הבטיחות של ה-AI עצר את התשובה (SAFETY)",
+  IMAGE_SAFETY: "מסנן בטיחות התמונות של ה-AI חסם את התמונה (IMAGE_SAFETY)",
+  PROHIBITED_CONTENT: "הבקשה נחסמה עקב מדיניות תוכן מוגבל (PROHIBITED_CONTENT)",
+  IMAGE_PROHIBITED_CONTENT: "התמונה נחסמה עקב מדיניות תוכן מוגבל (IMAGE_PROHIBITED_CONTENT)",
+  BLOCKLIST: "הבקשה כללה מונח חסום במילון הבטיחות (BLOCKLIST)",
+  RECITATION: "התשובה נעצרה עקב דמיון לתוכן מוגן (RECITATION)",
+  OTHER: "המודל עצר את התשובה מסיבת בטיחות/מערכת (OTHER)",
+  IMAGE_OTHER: "המודל לא הצליח לעבד את התמונה מסיבת בטיחות/איכות (IMAGE_OTHER)",
+};
+
+function detectKitchenSafetyLimitation(text: string): SafetyLimitationInfo | undefined {
+  if (!text) return undefined;
+  const hasExplicitMarker = text.includes("מגבלת בטיחות");
+  const hasImplicitRestriction =
+    (text.includes("אסור") || text.includes("רק בנוכחות מבוגר") || text.includes("לפי הגדרות הבטיחות") || text.includes("הרשאות הבטיחות")) &&
+    (text.includes("כיריים") || text.includes("תנור") || text.includes("סכין") || text.includes("מים רותחים") || text.includes("מחבת"));
+
+  if (!hasExplicitMarker && !hasImplicitRestriction) return undefined;
+
+  const reasons: string[] = [];
+  const lines = text.split("\n").map((l) => l.trim());
+  for (const line of lines) {
+    if (
+      line.includes("מגבלת בטיחות") ||
+      ((line.includes("כיריים") || line.includes("תנור") || line.includes("סכין")) &&
+        (line.includes("מבוגר") || line.includes("אסור") || line.includes("בטיחות")))
+    ) {
+      const cleaned = line.replace(/^[-*•#>\s⚠️]+/, "").replace(/\*\*/g, "").trim();
+      if (cleaned && !reasons.includes(cleaned)) {
+        reasons.push(cleaned);
+      }
+    }
+  }
+
+  if (reasons.length === 0) {
+    reasons.push("חלק משלבי ההכנה הרגילים דורשים שימוש בכיריים, תנור או סכין חדה שמוגבלים בפרופיל הבטיחות במטבח.");
+  }
+
+  return {
+    kind: "kitchen_safety",
+    title: "מגבלת בטיחות במטבח – איך תרצו להמשיך?",
+    reasons: reasons.slice(0, 2),
+    mitigations: [
+      {
+        id: "adult-present",
+        label: "👨‍👩‍👧 יש לידי מבוגר שעוזר לי",
+        prompt:
+          "יש לידי עכשיו הורה/מבוגר שמשגיח ועוזר לי עם הכיריים, התנור או הסכין החדה – תן לי בבקשה את ההוראות המלאות להכנה משותפת!",
+      },
+      {
+        id: "safe-solo",
+        label: "🥪 הצע חלופה בטוחה להכנה לבד",
+        prompt:
+          "תציע לי בבקשה גרסה חלופית ובטוחה של המנה עם אותם מצרכים שאפשר להכין לבד לגמרי (למשל במיקרוגל, בטוסטר לחיצה או ללא בישול וחיתוך חד).",
+      },
+      {
+        id: "pre-cut",
+        label: "🔪 המצרכים כבר חתוכים/מוכנים",
+        prompt:
+          "המצרכים כבר חתוכים ומוכנים מראש על ידי ההורים – איך מרכיבים את המנה מכאן בצורה בטוחה?",
+      },
+      {
+        id: "admin-permissions",
+        label: "⚙️ עדכון הרשאות בטיחות (להורים)",
+        action: "open_admin_children",
+      },
+    ],
+  };
+}
+
 export async function runChatTurn(opts: {
   model: string;
   systemInstruction: string;
@@ -147,7 +235,7 @@ export async function runChatTurn(opts: {
   sessionId?: string;
   assistantMessageId: string;
   userMessageSnippet?: string;
-}): Promise<{ text: string; memoryUpdates: MemoryUpdate[] }> {
+}): Promise<{ text: string; memoryUpdates: MemoryUpdate[]; safetyLimitation?: SafetyLimitationInfo }> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error("GEMINI_API_KEY is not configured");
   const ai = new GoogleGenAI({ apiKey });
@@ -171,6 +259,24 @@ export async function runChatTurn(opts: {
             systemInstruction: opts.systemInstruction,
             tools: [{ functionDeclarations: TOOL_DECLARATIONS }],
             temperature: 0.7,
+            safetySettings: [
+              {
+                category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+                threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+              },
+              {
+                category: HarmCategory.HARM_CATEGORY_HARASSMENT,
+                threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+              },
+              {
+                category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+                threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+              },
+              {
+                category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+                threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+              },
+            ],
           },
         });
         if (res) break;
@@ -199,7 +305,98 @@ export async function runChatTurn(opts: {
 
     const calls = res.functionCalls || [];
     if (!calls.length) {
-      return { text: (res.text || "").trim() || "אופס, לא הצלחתי לחשוב על תשובה. נסה/י שוב?", memoryUpdates };
+      const replyText = (res.text || "").trim();
+      const candidate = res.candidates?.[0];
+      const finishReason = candidate?.finishReason ? String(candidate.finishReason) : "";
+      const blockReason = res.promptFeedback?.blockReason ? String(res.promptFeedback.blockReason) : "";
+
+      const isBlockedBySafety =
+        Boolean(blockReason) ||
+        ["SAFETY", "IMAGE_SAFETY", "PROHIBITED_CONTENT", "IMAGE_PROHIBITED_CONTENT", "BLOCKLIST", "RECITATION"].includes(
+          finishReason
+        ) ||
+        (!replyText && finishReason && finishReason !== "STOP");
+
+      if (isBlockedBySafety || !replyText) {
+        const reasons: string[] = [];
+        if (blockReason) {
+          reasons.push(`הבקשה נחסמה על ידי מסנן הבטיחות האוטומטי (${blockReason}).`);
+        }
+        if (finishReason && FINISH_REASON_HEBREW[finishReason]) {
+          reasons.push(FINISH_REASON_HEBREW[finishReason]);
+        } else if (finishReason && finishReason !== "STOP") {
+          reasons.push(`התשובה נעצרה על ידי המודל (סיבה: ${finishReason}).`);
+        }
+
+        const ratings = [...(candidate?.safetyRatings || []), ...(res.promptFeedback?.safetyRatings || [])];
+        for (const r of ratings) {
+          const cat = r.category ? String(r.category) : "";
+          const prob = r.probability ? String(r.probability) : "";
+          if (r.blocked || prob === "HIGH" || prob === "MEDIUM") {
+            const label = HARM_CATEGORY_HEBREW[cat] || `קטגוריית בטיחות: ${cat} (${prob})`;
+            if (!reasons.includes(label)) reasons.push(label);
+          }
+        }
+
+        if (reasons.length === 0) {
+          reasons.push(
+            "מסנן הבטיחות של ה-AI עצר את התשובה (ייתכן שבגלל זיהוי סכין, כיריים/אש בתמונה או ניסוח שנראה למודל רגיש)."
+          );
+        }
+
+        await logAiError({
+          userId: opts.userId,
+          sessionId: opts.sessionId,
+          modelName: opts.model,
+          errorCode: `SAFETY_${blockReason || finishReason || "EMPTY"}`,
+          errorMessage: reasons.join(" | "),
+          promptSummary: opts.userMessageSnippet,
+        });
+
+        const rawCleanQuestion = (opts.userMessageSnippet || "")
+          .replace(/^📷 \[צילום מצרכים(?: ×\d+)?\]\s*/, "")
+          .trim();
+
+        const safetyLimitation: SafetyLimitationInfo = {
+          kind: "ai_filter",
+          title: "התשובה הוגבלה על ידי מסנן הבטיחות של ה-AI",
+          reasons,
+          mitigations: [
+            {
+              id: "safe-rephrase",
+              label: "🔄 נסה שוב בניסוח בטוח וממוקד במתכון",
+              prompt: rawCleanQuestion
+                ? `בהקשר של הכנת אוכל ביתי ובטוח במטבח בלבד: ${rawCleanQuestion}. אנא הצע אפשרויות בטוחות להכנה.`
+                : "אנא הצע לי רעיונות בטוחים וקלים להכנת כריך או ארוחה ממה שיש במטבח הביתי.",
+            },
+            {
+              id: "edit-last",
+              label: "✏️ ערוך את ההודעה / החלף תמונה",
+              action: "prefill_last",
+            },
+            {
+              id: "no-cook-option",
+              label: "🥪 בקש הצעה ללא בישול או סכין חדה",
+              prompt: "תציע לי רעיון טעים ובטוח לכריך או ארוחה קלה להכנה ללא בישול וללא שימוש בסכין חדה.",
+            },
+          ],
+        };
+
+        return {
+          text:
+            replyText ||
+            "מסנן הבטיחות האוטומטי עצר את התשובה (למשל אם הופיעו בתמונה סכין מטבח, כיריים או ניסוח שנראה למודל רגיש). פירטתי למטה את הסיבה ואפשר לפתור זאת בלחיצה אחת:",
+          memoryUpdates,
+          safetyLimitation,
+        };
+      }
+
+      const kitchenSafety = detectKitchenSafetyLimitation(replyText);
+      return {
+        text: replyText,
+        memoryUpdates,
+        safetyLimitation: kitchenSafety,
+      };
     }
 
     const modelContent = res.candidates?.[0]?.content;
