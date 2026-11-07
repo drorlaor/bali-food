@@ -63,10 +63,6 @@ export default function ConfigTab({ toast }: { toast: (k: "ok" | "err", t: strin
           onChange={(e) => setCfg({ ...cfg, masterSystemPrompt: e.target.value })}
           className="input-base min-h-[520px] font-mono text-[13px] leading-6"
         />
-        <div className="mt-3 flex items-center gap-2">
-          <label htmlFor="model-name" className="text-sm text-stone-500">מודל:</label>
-          <input id="model-name" dir="ltr" value={cfg.modelName} onChange={(e) => setCfg({ ...cfg, modelName: e.target.value })} className="input-base max-w-56" />
-        </div>
       </section>
 
       <div className="space-y-5 lg:col-span-2">
