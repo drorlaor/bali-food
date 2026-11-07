@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import { Markdown, MemoryBadges } from "./Bits";
 import { GROUP_LABELS, type MemoryUpdate } from "@/lib/types";
+import { APP_VERSION, FEATURE_RELEASE_ID, WHATS_NEW_ITEMS, type WhatsNewAction } from "@/lib/version";
 
 type Msg = {
   id: string;
@@ -132,6 +133,7 @@ export default function ChatApp({ user, quickPrompts }: Props) {
   const [pendingImages, setPendingImages] = useState<string[]>([]);
   const [compressingImages, setCompressingImages] = useState(false);
   const [photoMenuOpen, setPhotoMenuOpen] = useState(false);
+  const [whatsNewOpen, setWhatsNewOpen] = useState(false);
   const recRef = useRef<SpeechRec | null>(null);
   const baseTextRef = useRef("");
   const taRef = useRef<HTMLTextAreaElement>(null);
@@ -155,6 +157,15 @@ export default function ChatApp({ user, quickPrompts }: Props) {
     const w = window as unknown as { SpeechRecognition?: new () => SpeechRec; webkitSpeechRecognition?: new () => SpeechRec };
     setSpeechOk(Boolean(w.SpeechRecognition || w.webkitSpeechRecognition));
     fetchSessions();
+
+    try {
+      const seenRelease = localStorage.getItem("bali_seen_feature_release");
+      if (seenRelease !== FEATURE_RELEASE_ID) {
+        setWhatsNewOpen(true);
+      }
+    } catch {
+      // ignore storage errors
+    }
   }, [fetchSessions]);
 
   useEffect(() => {
@@ -250,6 +261,31 @@ export default function ChatApp({ user, quickPrompts }: Props) {
     galleryInputRef.current?.click();
   }
 
+  function closeWhatsNew() {
+    try {
+      localStorage.setItem("bali_seen_feature_release", FEATURE_RELEASE_ID);
+    } catch {
+      // ignore
+    }
+    setWhatsNewOpen(false);
+  }
+
+  function handleWhatsNewAction(action: WhatsNewAction) {
+    closeWhatsNew();
+    if (action === "camera") {
+      openCamera();
+    } else if (action === "history") {
+      fetchSessions();
+      setHistoryOpen(true);
+    } else if (action === "shopping") {
+      setShoppingOpen(true);
+    } else if (action === "parent_prompt") {
+      send("מה כדאי להכין מחר בבוקר לכריכים לכל הילדים?");
+    } else if (action === "insights") {
+      window.location.href = "/admin?tab=audit";
+    }
+  }
+
   async function loadSession(id: string) {
     setHistoryOpen(false);
     setLoadingSession(true);
@@ -333,6 +369,14 @@ export default function ChatApp({ user, quickPrompts }: Props) {
             </div>
             <div className="truncate text-xs text-stone-500">היי {user.displayName}!</div>
           </div>
+          <button
+            id="whats-new-btn"
+            onClick={() => setWhatsNewOpen(true)}
+            className="btn-ghost shrink-0 px-2 py-1.5 text-mango-600 sm:px-2.5 sm:py-2"
+            title="מה חדש בבא לי?"
+          >
+            <Sparkles size={18} />
+          </button>
           <button id="new-chat-btn" onClick={newChat} className="btn-ghost shrink-0 px-2 py-1.5 sm:px-2.5 sm:py-2" title="שיחה חדשה">
             <Plus size={18} /> <span className="hidden sm:inline">שיחה חדשה</span>
           </button>
@@ -692,6 +736,124 @@ export default function ChatApp({ user, quickPrompts }: Props) {
           newChat();
         }}
       />
+      <WhatsNewModal
+        open={whatsNewOpen}
+        onClose={closeWhatsNew}
+        onAction={handleWhatsNewAction}
+        isParent={isParent}
+        displayName={user.displayName}
+      />
+    </div>
+  );
+}
+
+function WhatsNewModal({
+  open,
+  onClose,
+  onAction,
+  isParent,
+  displayName,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onAction: (action: WhatsNewAction) => void;
+  isParent: boolean;
+  displayName: string;
+}) {
+  if (!open) return null;
+
+  const items = WHATS_NEW_ITEMS.filter(
+    (item) => item.audience === "all" || item.audience === (isParent ? "parent" : "child")
+  );
+
+  return (
+    <div
+      className="fixed inset-0 z-[90] flex items-center justify-center p-4 overflow-y-auto"
+      dir="rtl"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="whats-new-title"
+    >
+      <div
+        onClick={onClose}
+        className="fixed inset-0 bg-stone-900/45 backdrop-blur-sm transition-opacity"
+      />
+      <div className="relative z-10 flex max-h-[88dvh] w-full max-w-md flex-col overflow-hidden rounded-[28px] bg-[#fffaf4] shadow-2xl ring-1 ring-white/80 animate-pop">
+        {/* Festive Gradient Header */}
+        <div className="brand-gradient relative px-6 pb-5 pt-6 text-white">
+          <button
+            id="close-whats-new-btn"
+            onClick={onClose}
+            className="absolute left-4 top-4 rounded-full bg-white/20 p-2 text-white transition hover:bg-white/30"
+            aria-label="סגור"
+          >
+            <X size={18} />
+          </button>
+          <div className="inline-flex items-center gap-1.5 rounded-full bg-white/25 px-3 py-1 text-xs font-extrabold backdrop-blur-sm">
+            <Sparkles size={13} />
+            גרסה {APP_VERSION} · חדש באפליקציה!
+          </div>
+          <h2 id="whats-new-title" className="mt-2.5 text-2xl font-black leading-tight">
+            מה חדש ב״בא לי״? 🎉
+          </h2>
+          <p className="mt-1 text-sm text-white/90">
+            {isParent
+              ? `היי ${displayName}, הוספנו יכולות חדשות שיעזרו לתכנן כריכים, ארוחות וקניות בקלות:`
+              : `היי ${displayName}! תראה/י אילו דברים מגניבים אפשר לעשות עכשיו באפליקציה:`}
+          </p>
+        </div>
+
+        {/* Feature Cards List */}
+        <div className="flex-1 space-y-3 overflow-y-auto p-4">
+          {items.map((item) => {
+            const title = !isParent && item.titleChild ? item.titleChild : item.title;
+            const desc = !isParent && item.descriptionChild ? item.descriptionChild : item.description;
+            return (
+              <div
+                key={item.id}
+                className="flex flex-col gap-2.5 rounded-2xl border border-mango-200/80 bg-white p-4 shadow-sm transition hover:border-mango-300"
+              >
+                <div className="flex items-start gap-3">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-mango-50 text-2xl ring-1 ring-mango-200/70">
+                    {item.emoji}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="rounded-full bg-mango-100 px-2 py-0.5 text-[10px] font-extrabold text-mango-800">
+                        {item.badge}
+                      </span>
+                      <h3 className="text-sm font-extrabold text-stone-900">{title}</h3>
+                    </div>
+                    <p className="mt-1 text-xs leading-relaxed text-stone-600">{desc}</p>
+                  </div>
+                </div>
+                <div className="flex justify-end">
+                  <button
+                    id={`whats-new-cta-${item.id}`}
+                    type="button"
+                    onClick={() => onAction(item.action)}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-mango-50 px-3.5 py-1.5 text-xs font-extrabold text-mango-700 ring-1 ring-mango-200 transition hover:bg-mango-100 active:scale-95"
+                  >
+                    {item.ctaLabel}
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Footer CTA */}
+        <div className="border-t border-stone-200/80 bg-white/90 p-4">
+          <button
+            id="whats-new-got-it-btn"
+            type="button"
+            onClick={onClose}
+            className="w-full rounded-2xl brand-gradient py-3 text-sm font-extrabold text-white shadow-lg shadow-mango-500/25 transition active:scale-95"
+          >
+            איזה כיף, בואו נתחיל! 🚀
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

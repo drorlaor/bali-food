@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Sparkles, RefreshCw, X } from "lucide-react";
-import { APP_VERSION } from "@/lib/version";
+import { APP_VERSION, FEATURE_RELEASE_ID } from "@/lib/version";
 
 interface VersionInfo {
   version: string;
@@ -15,17 +15,20 @@ export default function VersionNotifier() {
   const [justUpdatedNote, setJustUpdatedNote] = useState<string | null>(null);
 
   useEffect(() => {
-    // Check if the user just updated to this version
-    const lastSeen = localStorage.getItem("bali_seen_version");
-    if (!lastSeen) {
+    const lastSeenVersion = localStorage.getItem("bali_seen_version");
+    const lastSeenFeatureRelease = localStorage.getItem("bali_seen_feature_release");
+
+    if (!lastSeenVersion) {
       localStorage.setItem("bali_seen_version", APP_VERSION);
-    } else if (lastSeen !== APP_VERSION) {
-      setJustUpdatedNote(`האפליקציה עודכנה לגרסה ${APP_VERSION}`);
+    } else if (lastSeenVersion !== APP_VERSION) {
       localStorage.setItem("bali_seen_version", APP_VERSION);
-      setTimeout(() => setJustUpdatedNote(null), 4000);
+      // Only show the small toast if the full What's New modal is not about to pop up
+      if (lastSeenFeatureRelease === FEATURE_RELEASE_ID) {
+        setJustUpdatedNote(`האפליקציה עודכנה לגרסה ${APP_VERSION}`);
+        setTimeout(() => setJustUpdatedNote(null), 4000);
+      }
     }
 
-    // Function to check if a newer version is deployed on server
     async function checkServerVersion() {
       try {
         const res = await fetch("/api/version", { cache: "no-store" });
@@ -39,7 +42,6 @@ export default function VersionNotifier() {
       }
     }
 
-    // Check immediately, periodically, and when tab becomes active
     checkServerVersion();
     const interval = setInterval(checkServerVersion, 60000);
     const onVisibility = () => {
@@ -54,42 +56,38 @@ export default function VersionNotifier() {
   }, []);
 
   function handleReload() {
-    if (updateAvailable) {
-      localStorage.setItem("bali_seen_version", updateAvailable.version);
-    }
     window.location.reload();
   }
 
   return (
     <>
-      {/* Banner when a new version is deployed on Vercel */}
       {updateAvailable && (
         <aside
           role="status"
           aria-live="polite"
-          className="fixed top-2 inset-x-3 z-[100] mx-auto max-w-lg animate-pop"
+          className="fixed inset-x-3 top-2 z-[100] mx-auto max-w-lg animate-pop"
           dir="rtl"
         >
-          <div className="flex items-center justify-between gap-3 rounded-2xl brand-gradient px-4 py-3 text-white shadow-2xl shadow-mango-500/40">
-            <div className="flex items-center gap-2.5 min-w-0">
+          <div className="brand-gradient flex items-center justify-between gap-3 rounded-2xl px-4 py-3 text-white shadow-2xl shadow-mango-500/40">
+            <div className="flex min-w-0 items-center gap-2.5">
               <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-white/20">
                 <Sparkles size={18} />
               </span>
               <div className="min-w-0">
-                <p className="text-sm font-bold leading-tight">עודכנה גרסה חדשה באפליקציה!</p>
-                <p className="truncate text-xs text-white/85">
+                <p className="text-sm font-bold leading-tight">יש חידושים באפליקציה! 🎉</p>
+                <p className="truncate text-xs text-white/90">
                   {updateAvailable.notes || `גרסה ${updateAvailable.version} זמינה כעת`}
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-1.5 shrink-0">
+            <div className="flex shrink-0 items-center gap-1.5">
               <button
                 id="btn-update-reload"
                 onClick={handleReload}
                 className="flex items-center gap-1 rounded-xl bg-white px-3 py-1.5 text-xs font-bold text-stone-900 shadow-md transition hover:bg-stone-50 active:scale-95"
               >
                 <RefreshCw size={13} />
-                רענון
+                עדכן עכשיו
               </button>
               <button
                 onClick={() => setUpdateAvailable(null)}
@@ -103,7 +101,6 @@ export default function VersionNotifier() {
         </aside>
       )}
 
-      {/* Toast when first opening the new version */}
       {justUpdatedNote && !updateAvailable && (
         <aside
           role="status"

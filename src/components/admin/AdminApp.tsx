@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { BookOpenText, Baby, ScrollText, Users, MessageCircle, LogOut } from "lucide-react";
 import ConfigTab from "./ConfigTab";
@@ -22,6 +22,14 @@ export default function AdminApp({ me }: { me: { id: string; displayName: string
   const [tab, setTab] = useState<TabKey>("config");
   const { users, reload } = useUsers();
   const { toast, show } = useToast();
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const reqTab = params.get("tab") as TabKey | null;
+    if (reqTab && TABS.some((t) => t.key === reqTab)) {
+      setTab(reqTab);
+    }
+  }, []);
 
   function selectTab(next: TabKey) {
     setTab(next);
