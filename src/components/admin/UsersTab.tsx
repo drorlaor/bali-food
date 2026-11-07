@@ -40,7 +40,7 @@ export default function UsersTab({ users, reload, meId, toast }: { users: AdminU
 
   return (
     <div className="grid gap-5 lg:grid-cols-3">
-      <section className="card h-fit">
+      <section className="card h-fit min-w-0">
         <h2 className="mb-1 flex items-center gap-2 text-lg font-bold"><UserPlus size={18} className="text-mango-500" /> הוספת בן/בת משפחה</h2>
         <p className="mb-3 text-sm text-stone-500">רק כתובות Gmail ברשימה יוכלו להיכנס לאפליקציה.</p>
         <form onSubmit={add} className="space-y-2.5">
@@ -71,7 +71,7 @@ export default function UsersTab({ users, reload, meId, toast }: { users: AdminU
         </form>
       </section>
 
-      <section className="card lg:col-span-2">
+      <section className="card min-w-0 lg:col-span-2">
         <h2 className="mb-3 text-lg font-bold">רשימת המשפחה ({users.length})</h2>
         <div className="space-y-2">
           {users.map((u) =>

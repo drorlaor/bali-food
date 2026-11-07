@@ -108,13 +108,15 @@ export type Toast = { kind: "ok" | "err"; text: string } | null;
 export function ToastView({ toast }: { toast: Toast }) {
   if (!toast) return null;
   return (
-    <div
-      className={`fixed bottom-5 left-1/2 z-50 flex -translate-x-1/2 animate-pop items-center gap-2 rounded-full px-4 py-2 text-sm font-medium text-white shadow-xl ${
-        toast.kind === "ok" ? "bg-green-600" : "bg-rose-600"
-      }`}
-    >
-      {toast.kind === "ok" ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
-      {toast.text}
+    <div className="pointer-events-none fixed inset-x-0 bottom-20 z-50 flex justify-center px-4 md:bottom-6">
+      <div
+        className={`pointer-events-auto flex animate-pop items-center gap-2 rounded-full px-4 py-2 text-sm font-medium text-white shadow-xl ${
+          toast.kind === "ok" ? "bg-green-600" : "bg-rose-600"
+        }`}
+      >
+        {toast.kind === "ok" ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
+        {toast.text}
+      </div>
     </div>
   );
 }

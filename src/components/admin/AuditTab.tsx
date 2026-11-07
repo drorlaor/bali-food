@@ -312,7 +312,7 @@ export default function AuditTab({ users }: { users: AdminUser[] }) {
                 {insights.kids.map((k) => {
                   const maxTopic = Math.max(1, ...k.topics.map((t) => t.count));
                   return (
-                    <section key={k.userId} className="card space-y-4">
+                    <section key={k.userId} className="card min-w-0 space-y-4">
                       <div className="flex items-center justify-between border-b border-stone-100 pb-3">
                         <div>
                           <h3 className="text-lg font-extrabold text-stone-900">{k.displayName}</h3>
@@ -405,7 +405,7 @@ export default function AuditTab({ users }: { users: AdminUser[] }) {
         <div className="space-y-5">
           <ChildPicker users={users} value={childId} onChange={setChildId} />
           <div className="grid gap-5 lg:grid-cols-3">
-            <section className={`card lg:col-span-1 ${active ? "hidden lg:block" : ""}`}>
+            <section className={`card min-w-0 lg:col-span-1 ${active ? "hidden lg:block" : ""}`}>
               <h2 className="mb-3 flex items-center gap-2 font-bold">
                 <MessagesSquare size={18} className="text-mango-500" /> שיחות
               </h2>
@@ -436,7 +436,7 @@ export default function AuditTab({ users }: { users: AdminUser[] }) {
               )}
             </section>
 
-            <section className={`card lg:col-span-2 ${active ? "" : "hidden lg:block"}`}>
+            <section className={`card min-w-0 lg:col-span-2 ${active ? "" : "hidden lg:block"}`}>
               {!active ? (
                 <p className="py-16 text-center text-sm text-stone-400">בחרו שיחה כדי לצפות בתמליל המלא</p>
               ) : !messages ? (

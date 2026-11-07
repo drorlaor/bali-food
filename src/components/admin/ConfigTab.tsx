@@ -48,8 +48,8 @@ export default function ConfigTab({ toast }: { toast: (k: "ok" | "err", t: strin
 
   return (
     <div className="grid gap-5 lg:grid-cols-5">
-      <section className="card lg:col-span-3">
-        <div className="mb-2 flex items-center justify-between">
+      <section className="card min-w-0 lg:col-span-3">
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-1">
           <h2 className="text-lg font-bold">חוקת התזונה (System Prompt)</h2>
           <span className="text-xs text-stone-400">
             עודכן: {fmtDate(cfg.updatedAt)} {cfg.updatedBy ? `(${cfg.updatedBy})` : ""}
@@ -61,11 +61,11 @@ export default function ConfigTab({ toast }: { toast: (k: "ok" | "err", t: strin
           dir="rtl"
           value={cfg.masterSystemPrompt}
           onChange={(e) => setCfg({ ...cfg, masterSystemPrompt: e.target.value })}
-          className="input-base min-h-[520px] font-mono text-[13px] leading-6"
+          className="input-base min-h-[260px] font-mono text-[13px] leading-6 md:min-h-[480px]"
         />
       </section>
 
-      <div className="space-y-5 lg:col-span-2">
+      <div className="min-w-0 space-y-5 lg:col-span-2">
         <section className="card">
           <h2 className="mb-1 text-lg font-bold">המזווה הקבוע של הבית</h2>
           <p className="mb-3 text-sm text-stone-500">מוצרים שבדרך כלל יש בבית. ה-AI יתעדף אותם להצעות מיידיות.</p>

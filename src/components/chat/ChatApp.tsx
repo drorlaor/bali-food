@@ -222,25 +222,25 @@ export default function ChatApp({ user, quickPrompts }: Props) {
   const isParent = user.role === "parent";
 
   return (
-    <div className="flex h-dvh flex-col">
+    <div className="flex h-dvh w-full max-w-full flex-col overflow-x-hidden">
       {/* Top bar */}
       <header className="glass sticky top-0 z-30 border-b border-white/60 px-3 pb-2 pt-[max(0.5rem,env(safe-area-inset-top))]">
-        <div className="mx-auto flex max-w-2xl items-center gap-2">
+        <div className="mx-auto flex max-w-2xl items-center gap-1.5 sm:gap-2">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl brand-gradient shadow-md shadow-mango-500/30">
             <img src="/icon.svg" alt="" className="h-9 w-9" />
           </div>
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
-              <span className="text-lg font-extrabold leading-tight brand-text">בא לי</span>
+            <div className="flex items-center gap-1.5">
+              <span className="truncate text-lg font-extrabold leading-tight brand-text">בא לי</span>
               {isParent && (
-                <span className="rounded-full bg-mango-100 px-2 py-0.5 text-[11px] font-bold text-mango-800 ring-1 ring-mango-300">
+                <span className="shrink-0 rounded-full bg-mango-100 px-2 py-0.5 text-[10px] font-bold text-mango-800 ring-1 ring-mango-300">
                   מצב הורים
                 </span>
               )}
             </div>
             <div className="truncate text-xs text-stone-500">היי {user.displayName}!</div>
           </div>
-          <button id="new-chat-btn" onClick={newChat} className="btn-ghost px-2.5" title="שיחה חדשה">
+          <button id="new-chat-btn" onClick={newChat} className="btn-ghost shrink-0 px-2 py-1.5 sm:px-2.5 sm:py-2" title="שיחה חדשה">
             <Plus size={18} /> <span className="hidden sm:inline">שיחה חדשה</span>
           </button>
           <button
@@ -249,13 +249,13 @@ export default function ChatApp({ user, quickPrompts }: Props) {
               fetchSessions();
               setHistoryOpen(true);
             }}
-            className="btn-ghost px-2.5"
+            className="btn-ghost shrink-0 px-2 py-1.5 sm:px-2.5 sm:py-2"
             title="שיחות קודמות"
           >
             <History size={18} /> <span className="hidden sm:inline">שיחות קודמות</span>
           </button>
           {!isParent && (
-            <button id="my-profile-btn" onClick={() => setDrawer(true)} className="btn-ghost px-2.5" title="הפרופיל שלי">
+            <button id="my-profile-btn" onClick={() => setDrawer(true)} className="btn-ghost shrink-0 px-2 py-1.5 sm:px-2.5 sm:py-2" title="הפרופיל שלי">
               <UserRound size={18} /> <span className="hidden sm:inline">הפרופיל שלי</span>
             </button>
           )}
@@ -264,12 +264,12 @@ export default function ChatApp({ user, quickPrompts }: Props) {
               <button
                 id="shopping-list-btn"
                 onClick={() => setShoppingOpen(true)}
-                className="btn-ghost px-2.5"
+                className="btn-ghost shrink-0 px-2 py-1.5 sm:px-2.5 sm:py-2"
                 title="רשימת קניות מומלצת"
               >
                 <ShoppingBasket size={18} className="text-leaf-600" /> <span className="hidden sm:inline">רשימת קניות</span>
               </button>
-              <Link id="admin-link" href="/admin" className="btn-ghost px-2.5" title="לוח בקרה להורים">
+              <Link id="admin-link" href="/admin" className="btn-ghost shrink-0 px-2 py-1.5 sm:px-2.5 sm:py-2" title="לוח בקרה להורים">
                 <ShieldCheck size={18} /> <span className="hidden sm:inline">לוח הורים</span>
               </Link>
             </>
@@ -278,7 +278,7 @@ export default function ChatApp({ user, quickPrompts }: Props) {
       </header>
 
       {/* Messages */}
-      <main className="flex-1 overflow-y-auto px-3">
+      <main className="flex-1 overflow-x-hidden overflow-y-auto px-3">
         <div className="mx-auto max-w-2xl py-4">
           {loadingSession ? (
             <div className="flex flex-col items-center justify-center py-20 text-stone-400">
@@ -286,7 +286,7 @@ export default function ChatApp({ user, quickPrompts }: Props) {
               <p className="mt-3 text-sm">טוען שיחה...</p>
             </div>
           ) : empty ? (
-            <div className="flex flex-col items-center pt-6 text-center animate-fade-up">
+            <div className="mx-auto flex max-w-lg flex-col items-center px-2 pt-6 text-center animate-fade-up">
               <div className="mb-4 flex h-24 w-24 animate-float items-center justify-center rounded-[30px] brand-gradient shadow-xl shadow-berry-500/30">
                 <img src="/icon.svg" alt="" className="h-20 w-20" />
               </div>
@@ -506,7 +506,7 @@ function ShoppingListDrawer({ open, onClose }: { open: boolean; onClose: () => v
   }
 
   return (
-    <div className={`fixed inset-0 z-50 ${open ? "" : "pointer-events-none"}`} aria-hidden={!open}>
+    <div className={`fixed inset-0 z-50 overflow-hidden ${open ? "" : "pointer-events-none invisible"}`} aria-hidden={!open}>
       <div
         onClick={onClose}
         className={`absolute inset-0 bg-stone-900/30 backdrop-blur-sm transition-opacity ${open ? "opacity-100" : "opacity-0"}`}
@@ -633,7 +633,7 @@ function HistoryDrawer({
   onNewChat: () => void;
 }) {
   return (
-    <div className={`fixed inset-0 z-50 ${open ? "" : "pointer-events-none"}`} aria-hidden={!open}>
+    <div className={`fixed inset-0 z-50 overflow-hidden ${open ? "" : "pointer-events-none invisible"}`} aria-hidden={!open}>
       <div
         onClick={onClose}
         className={`absolute inset-0 bg-stone-900/30 backdrop-blur-sm transition-opacity ${open ? "opacity-100" : "opacity-0"}`}
@@ -725,7 +725,7 @@ function ProfileDrawer({ open, onClose, name }: { open: boolean; onClose: () => 
   ];
 
   return (
-    <div className={`fixed inset-0 z-50 ${open ? "" : "pointer-events-none"}`} aria-hidden={!open}>
+    <div className={`fixed inset-0 z-50 overflow-hidden ${open ? "" : "pointer-events-none invisible"}`} aria-hidden={!open}>
       <div onClick={onClose} className={`absolute inset-0 bg-stone-900/30 backdrop-blur-sm transition-opacity ${open ? "opacity-100" : "opacity-0"}`} />
       <aside
         className={`absolute inset-y-0 right-0 flex w-[88%] max-w-sm flex-col bg-[#fffaf4] shadow-2xl transition-transform duration-300 ${

@@ -40,10 +40,10 @@ export default function ChildrenTab({ users, toast }: { users: AdminUser[]; toas
       <ChildPicker users={users} value={childId} onChange={setChildId} />
       {childId && (
         <div key={childId} className="grid gap-5 lg:grid-cols-5">
-          <div className="lg:col-span-2">
+          <div className="min-w-0 lg:col-span-2">
             <ProfileCard userId={childId} toast={toast} />
           </div>
-          <div className="lg:col-span-3">
+          <div className="min-w-0 lg:col-span-3">
             <MemoryManager userId={childId} toast={toast} />
           </div>
         </div>

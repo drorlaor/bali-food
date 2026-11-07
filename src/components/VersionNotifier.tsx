@@ -39,7 +39,8 @@ export default function VersionNotifier() {
       }
     }
 
-    // Check periodically and when tab becomes active
+    // Check immediately, periodically, and when tab becomes active
+    checkServerVersion();
     const interval = setInterval(checkServerVersion, 60000);
     const onVisibility = () => {
       if (document.visibilityState === "visible") checkServerVersion();
@@ -107,11 +108,13 @@ export default function VersionNotifier() {
         <aside
           role="status"
           aria-live="polite"
-          className="fixed top-3 left-1/2 -translate-x-1/2 z-[100] flex animate-pop items-center gap-2 rounded-full bg-stone-900/90 backdrop-blur px-4 py-2 text-xs font-semibold text-white shadow-xl"
+          className="pointer-events-none fixed inset-x-0 top-3 z-[100] flex justify-center px-4"
           dir="rtl"
         >
-          <Sparkles size={14} className="text-mango-400" />
-          {justUpdatedNote}
+          <div className="flex animate-pop items-center gap-2 rounded-full bg-stone-900/90 px-4 py-2 text-xs font-semibold text-white shadow-xl backdrop-blur">
+            <Sparkles size={14} className="text-mango-400" />
+            {justUpdatedNote}
+          </div>
         </aside>
       )}
     </>
