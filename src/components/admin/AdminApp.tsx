@@ -12,7 +12,7 @@ import { ToastView, useToast, useUsers } from "./ui";
 const TABS = [
   { key: "config", label: "חוקת התזונה והמזווה", short: "חוקה ומזווה", icon: BookOpenText },
   { key: "children", label: "פרופילי ילדים וזיכרון", short: "ילדים", icon: Baby },
-  { key: "audit", label: "יומן שיחות ובקרה", short: "יומן", icon: ScrollText },
+  { key: "audit", label: "שימוש, שיחות ובקרה", short: "שימוש ויומן", icon: ScrollText },
   { key: "users", label: "ניהול משתמשים", short: "משתמשים", icon: Users },
 ] as const;
 

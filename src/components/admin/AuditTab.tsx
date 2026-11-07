@@ -11,6 +11,8 @@ import {
   CheckCircle2,
   ExternalLink,
   ShieldAlert,
+  BarChart3,
+  Sparkles,
 } from "lucide-react";
 import { Markdown } from "@/components/chat/Bits";
 import { CATEGORY_LABELS, parseJson, type MemoryUpdate } from "@/lib/types";
@@ -32,8 +34,36 @@ interface AiErrorLogRow {
   createdAt: string | null;
 }
 
+interface KidInsight {
+  userId: string;
+  displayName: string;
+  sessionCount: number;
+  userMessageCount: number;
+  totalMessageCount: number;
+  lastActiveAt: string | null;
+  factsBreakdown: {
+    liked: number;
+    disliked: number;
+    wishlist: number;
+    habits: number;
+    total: number;
+  };
+  topics: { key: string; label: string; count: number }[];
+  recentQuestions: { id: string; content: string; createdAt: string | null }[];
+}
+
+interface InsightsData {
+  totals: {
+    totalKids: number;
+    totalSessions: number;
+    totalUserMessages: number;
+    totalFactsLearned: number;
+  };
+  kids: KidInsight[];
+}
+
 export default function AuditTab({ users }: { users: AdminUser[] }) {
-  const [subTab, setSubTab] = useState<"sessions" | "errors">("sessions");
+  const [subTab, setSubTab] = useState<"sessions" | "insights" | "errors">("insights");
 
   // Sessions state
   const kids = users.filter((u) => u.role === "child");
@@ -42,10 +72,28 @@ export default function AuditTab({ users }: { users: AdminUser[] }) {
   const [active, setActive] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[] | null>(null);
 
+  // Insights state
+  const [insights, setInsights] = useState<InsightsData | null>(null);
+  const [loadingInsights, setLoadingInsights] = useState(false);
+  const [aiAnalysis, setAiAnalysis] = useState<string>("");
+  const [generatingAnalysis, setGeneratingAnalysis] = useState(false);
+
   // Errors state
   const [errorLogs, setErrorLogs] = useState<AiErrorLogRow[] | null>(null);
   const [loadingErrors, setLoadingErrors] = useState(false);
   const [clearing, setClearing] = useState(false);
+
+  const loadInsights = useCallback(async () => {
+    setLoadingInsights(true);
+    try {
+      const data = await api<InsightsData>("/api/admin/insights");
+      setInsights(data);
+    } catch {
+      setInsights(null);
+    } finally {
+      setLoadingInsights(false);
+    }
+  }, []);
 
   const loadErrorLogs = useCallback(async () => {
     setLoadingErrors(true);
@@ -60,8 +108,21 @@ export default function AuditTab({ users }: { users: AdminUser[] }) {
   }, []);
 
   useEffect(() => {
+    loadInsights();
     loadErrorLogs();
-  }, [loadErrorLogs]);
+  }, [loadInsights, loadErrorLogs]);
+
+  async function handleGenerateAnalysis() {
+    setGeneratingAnalysis(true);
+    try {
+      const res = await api<{ analysis: string }>("/api/admin/insights", { method: "POST" });
+      setAiAnalysis(res.analysis || "");
+    } catch {
+      setAiAnalysis("שגיאה בהפקת הדוח, נסו שוב.");
+    } finally {
+      setGeneratingAnalysis(false);
+    }
+  }
 
   useEffect(() => {
     if (!childId && kids.length) setChildId(kids[0].id);
@@ -103,7 +164,22 @@ export default function AuditTab({ users }: { users: AdminUser[] }) {
     <div className="space-y-5" dir="rtl">
       {/* Subtab navigation */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-stone-200 pb-3">
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            id="subtab-insights"
+            onClick={() => {
+              setSubTab("insights");
+              loadInsights();
+            }}
+            className={`flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-bold transition ${
+              subTab === "insights"
+                ? "bg-mango-500 text-white shadow-sm"
+                : "bg-white text-stone-600 ring-1 ring-stone-200 hover:bg-stone-50"
+            }`}
+          >
+            <BarChart3 size={16} />
+            סקירת שימוש ותובנות
+          </button>
           <button
             id="subtab-sessions"
             onClick={() => setSubTab("sessions")}
@@ -114,7 +190,7 @@ export default function AuditTab({ users }: { users: AdminUser[] }) {
             }`}
           >
             <MessagesSquare size={16} />
-            שיחות ילדים
+            תמלילי שיחות ילדים
           </button>
           <button
             id="subtab-errors"
@@ -142,6 +218,28 @@ export default function AuditTab({ users }: { users: AdminUser[] }) {
           </button>
         </div>
 
+        {subTab === "insights" && (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={loadInsights}
+              disabled={loadingInsights}
+              className="btn-ghost flex items-center gap-1.5 text-xs"
+            >
+              <RefreshCw size={14} className={loadingInsights ? "animate-spin" : ""} />
+              רענון נתונים
+            </button>
+            <button
+              id="generate-insights-btn"
+              onClick={handleGenerateAnalysis}
+              disabled={generatingAnalysis}
+              className="flex items-center gap-1.5 rounded-xl brand-gradient px-3.5 py-2 text-xs font-bold text-white shadow-sm transition active:scale-95 disabled:opacity-60"
+            >
+              <Sparkles size={14} className={generatingAnalysis ? "animate-spin" : ""} />
+              {generatingAnalysis ? "מנתח דפוסי שימוש..." : "הפק דוח תובנות והמלצות לשיפור (AI)"}
+            </button>
+          </div>
+        )}
+
         {subTab === "errors" && (
           <div className="flex items-center gap-2">
             <button
@@ -166,6 +264,141 @@ export default function AuditTab({ users }: { users: AdminUser[] }) {
           </div>
         )}
       </div>
+
+      {/* INSIGHTS SUBTAB */}
+      {subTab === "insights" && (
+        <div className="space-y-5">
+          {!insights && loadingInsights ? (
+            <Spinner />
+          ) : !insights ? (
+            <p className="py-12 text-center text-sm text-stone-400">לא ניתן לטעון נתוני שימוש כרגע.</p>
+          ) : (
+            <>
+              {/* KPI Summary Cards */}
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <div className="card text-center">
+                  <div className="text-xs font-semibold text-stone-500">ילדים פעילים</div>
+                  <div className="mt-1 text-2xl font-black text-stone-800">{insights.totals.totalKids}</div>
+                </div>
+                <div className="card text-center">
+                  <div className="text-xs font-semibold text-stone-500">סה&quot;כ שיחות</div>
+                  <div className="mt-1 text-2xl font-black text-mango-600">{insights.totals.totalSessions}</div>
+                </div>
+                <div className="card text-center">
+                  <div className="text-xs font-semibold text-stone-500">שאלות והודעות ילדים</div>
+                  <div className="mt-1 text-2xl font-black text-berry-600">{insights.totals.totalUserMessages}</div>
+                </div>
+                <div className="card text-center">
+                  <div className="text-xs font-semibold text-stone-500">העדפות שנלמדו</div>
+                  <div className="mt-1 text-2xl font-black text-leaf-600">{insights.totals.totalFactsLearned}</div>
+                </div>
+              </div>
+
+              {/* AI Generated Insights & Improvement Recommendations */}
+              {aiAnalysis && (
+                <section className="card border-2 border-mango-300 bg-white space-y-2">
+                  <h3 className="flex items-center gap-2 font-extrabold text-stone-900">
+                    <Sparkles size={18} className="text-mango-500" />
+                    ניתוח שימוש, תכנים והמלצות לשיפור עבור ההורים
+                  </h3>
+                  <div className="text-sm leading-relaxed">
+                    <Markdown>{aiAnalysis}</Markdown>
+                  </div>
+                </section>
+              )}
+
+              {/* Per-child usage & content cards */}
+              <div className="grid gap-5 md:grid-cols-2">
+                {insights.kids.map((k) => {
+                  const maxTopic = Math.max(1, ...k.topics.map((t) => t.count));
+                  return (
+                    <section key={k.userId} className="card space-y-4">
+                      <div className="flex items-center justify-between border-b border-stone-100 pb-3">
+                        <div>
+                          <h3 className="text-lg font-extrabold text-stone-900">{k.displayName}</h3>
+                          <p className="text-xs text-stone-400">
+                            פעילות אחרונה: {k.lastActiveAt ? fmtDate(k.lastActiveAt) : "טרם שוחח/ה"}
+                          </p>
+                        </div>
+                        <div className="flex gap-2 text-center">
+                          <div className="rounded-xl bg-mango-50 px-3 py-1.5 ring-1 ring-mango-200">
+                            <div className="text-sm font-black text-mango-700">{k.sessionCount}</div>
+                            <div className="text-[10px] font-semibold text-mango-600">שיחות</div>
+                          </div>
+                          <div className="rounded-xl bg-berry-50 px-3 py-1.5 ring-1 ring-berry-200">
+                            <div className="text-sm font-black text-berry-700">{k.userMessageCount}</div>
+                            <div className="text-[10px] font-semibold text-berry-600">הודעות</div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Topic Breakdown */}
+                      <div>
+                        <h4 className="mb-2 text-xs font-bold text-stone-500">תחומי שיחה מובילים (לפי תוכן ההודעות)</h4>
+                        <div className="space-y-2">
+                          {k.topics.map((t) => (
+                            <div key={t.key} className="space-y-1">
+                              <div className="flex justify-between text-xs">
+                                <span className="font-medium text-stone-700">{t.label}</span>
+                                <span className="font-bold text-stone-500">{t.count} אזכורים</span>
+                              </div>
+                              <div className="h-2 w-full overflow-hidden rounded-full bg-stone-100">
+                                <div
+                                  className="h-full rounded-full brand-gradient transition-all"
+                                  style={{ width: `${Math.round((t.count / maxTopic) * 100)}%` }}
+                                />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Facts learned breakdown */}
+                      <div>
+                        <h4 className="mb-2 text-xs font-bold text-stone-500">זיכרון והעדפות שנלמדו ({k.factsBreakdown.total})</h4>
+                        <div className="grid grid-cols-4 gap-1.5 text-center text-xs">
+                          <div className="rounded-xl bg-stone-50 p-2 ring-1 ring-stone-200/60">
+                            <div className="font-bold text-stone-800">{k.factsBreakdown.liked}</div>
+                            <div className="text-[10px] text-stone-500">אוהב/ת</div>
+                          </div>
+                          <div className="rounded-xl bg-stone-50 p-2 ring-1 ring-stone-200/60">
+                            <div className="font-bold text-leaf-700">{k.factsBreakdown.wishlist}</div>
+                            <div className="text-[10px] text-stone-500">רוצה לנסות</div>
+                          </div>
+                          <div className="rounded-xl bg-stone-50 p-2 ring-1 ring-stone-200/60">
+                            <div className="font-bold text-stone-800">{k.factsBreakdown.disliked}</div>
+                            <div className="text-[10px] text-stone-500">פחות אוהב</div>
+                          </div>
+                          <div className="rounded-xl bg-stone-50 p-2 ring-1 ring-stone-200/60">
+                            <div className="font-bold text-stone-800">{k.factsBreakdown.habits}</div>
+                            <div className="text-[10px] text-stone-500">הרגלים</div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Recent questions */}
+                      <div>
+                        <h4 className="mb-1.5 text-xs font-bold text-stone-500">הודעות ושאלות אחרונות של {k.displayName}</h4>
+                        {k.recentQuestions.length === 0 ? (
+                          <p className="text-xs text-stone-400">אין עדיין הודעות.</p>
+                        ) : (
+                          <ul className="space-y-1 text-xs text-stone-700">
+                            {k.recentQuestions.map((q) => (
+                              <li key={q.id} className="truncate rounded-lg bg-stone-50 px-2.5 py-1.5">
+                                &ldquo;{q.content}&rdquo;
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    </section>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
       {/* SESSIONS SUBTAB */}
       {subTab === "sessions" && (

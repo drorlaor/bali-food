@@ -1,3 +1,3 @@
-export const APP_VERSION = "1.2.1";
-export const BUILD_TIME = "2026-10-24 23:10";
-export const VERSION_NOTES = "הוספת יומן שגיאות AI מפורט להורים, התראות עדכון גרסה והגנה מקריסת מכסת שיחות";
+export const APP_VERSION = "1.3.0";
+export const BUILD_TIME = "2026-11-07 14:15";
+export const VERSION_NOTES = "צ'אט הורים מותאם אישית, מחולל רשימת קניות חכמה, דוח תובנות שימוש של הילדים והמשך שיחות קודמות";
