@@ -1,13 +1,14 @@
-export const APP_VERSION = "1.5.0";
-export const FEATURE_RELEASE_ID = "1.5.0";
-export const BUILD_TIME = "2026-11-07 17:15";
+export const APP_VERSION = "1.5.1";
+export const FEATURE_RELEASE_ID = "1.5.1";
+export const BUILD_TIME = "2026-11-07 17:46";
 export const VERSION_NOTES =
-  "חדש בבא לי! צילום מצרכים מהמקרר, רשימת קניות חכמה, שיחות קודמות ודוח תובנות";
+  "חדש! צילום מצרכים מהמקרר או מהשיש (במצלמה או מהגלריה) להמלצות חכמות לכריכים וארוחות";
 
 export type WhatsNewAction = "camera" | "history" | "shopping" | "parent_prompt" | "insights";
 
 export interface WhatsNewItem {
   id: string;
+  releaseId: string;
   audience: "all" | "child" | "parent";
   emoji: string;
   badge: string;
@@ -19,12 +20,16 @@ export interface WhatsNewItem {
   action: WhatsNewAction;
 }
 
+/**
+ * Contains only the new feature(s) introduced in the current FEATURE_RELEASE_ID.
+ */
 export const WHATS_NEW_ITEMS: WhatsNewItem[] = [
   {
     id: "fridge-vision",
+    releaseId: FEATURE_RELEASE_ID,
     audience: "all",
     emoji: "📸",
-    badge: "חדש! AI במצלמה",
+    badge: "חדש בגרסה זו!",
     title: "צילום מצרכים מהמקרר או מהשיש",
     titleChild: "צלמו מה יש במקרר וגלו מה להכין!",
     description:
@@ -33,52 +38,5 @@ export const WHATS_NEW_ITEMS: WhatsNewItem[] = [
       "לא בטוחים מה בא לכם לאכול? צלמו את המקרר או השיש (עד 3 תמונות) ו\"בא לי\" יזהה את המצרכים ויציע לכם רעיונות טעימים ובטוחים להכנה!",
     ctaLabel: "📸 נסה/י צילום עכשיו",
     action: "camera",
-  },
-  {
-    id: "chat-history",
-    audience: "all",
-    emoji: "🕘",
-    badge: "נוחות",
-    title: "חזרה לשיחות קודמות והמשך מאותה נקודה",
-    titleChild: "כל השיחות והרעיונות שלכם שמורים!",
-    description:
-      "אפשר לחזור לכל שיחה קודמת מהתפריט העליון או ממסך הפתיחה ולהמשיך אותה בדיוק מאיפה שהפסקתם.",
-    descriptionChild:
-      "אהבתם הצעה לכריך מאתמול? בלחיצה אחת אפשר לפתוח שיחות קודמות ולהמשיך אותן מאותו מקום.",
-    ctaLabel: "📂 לשיחות הקודמות",
-    action: "history",
-  },
-  {
-    id: "smart-shopping-list",
-    audience: "parent",
-    emoji: "🛒",
-    badge: "להורים",
-    title: "רשימת קניות שבועית חכמה + העתקה לוואטסאפ",
-    description:
-      "הפקת רשימת קניות מותאמת אישית לפי מה שהילדים אוהבים ומה שהם ביקשו לנסות בשיחות, מסודרת לפי מחלקות בסופר ומוכנה להעתקה בלחיצה לוואטסאפ.",
-    ctaLabel: "🛒 פתח רשימת קניות",
-    action: "shopping",
-  },
-  {
-    id: "parent-concierge",
-    audience: "parent",
-    emoji: "🥪",
-    badge: "להורים",
-    title: "צ'אט הורים חכם לתכנון כריכים וארוחות",
-    description:
-      "הצ'אט שלכם מכיר את הפרופילים, ההעדפות והבקשות של כל הילדים במשפחה ועוזר לתכנן כריכים לבוקר או ארוחה משפחתית שכולם יאהבו.",
-    ctaLabel: "💬 תכנן כריכים למחר",
-    action: "parent_prompt",
-  },
-  {
-    id: "kids-insights",
-    audience: "parent",
-    emoji: "📊",
-    badge: "להורים",
-    title: "סקירת שימוש ותובנות AI על הילדים",
-    description:
-      "לוח בקרה שמציג כמה הילדים משתמשים באפליקציה, על אילו נושאים הם מתייעצים, והמלצות AI לשיפור התזונה והמזווה בבית.",
-    ctaLabel: "📊 לדוח התובנות",
-    action: "insights",
   },
 ];

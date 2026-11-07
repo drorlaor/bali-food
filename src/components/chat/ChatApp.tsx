@@ -763,8 +763,12 @@ function WhatsNewModal({
   if (!open) return null;
 
   const items = WHATS_NEW_ITEMS.filter(
-    (item) => item.audience === "all" || item.audience === (isParent ? "parent" : "child")
+    (item) =>
+      item.releaseId === FEATURE_RELEASE_ID &&
+      (item.audience === "all" || item.audience === (isParent ? "parent" : "child"))
   );
+
+  if (items.length === 0) return null;
 
   return (
     <div
@@ -798,8 +802,8 @@ function WhatsNewModal({
           </h2>
           <p className="mt-1 text-sm text-white/90">
             {isParent
-              ? `היי ${displayName}, הוספנו יכולות חדשות שיעזרו לתכנן כריכים, ארוחות וקניות בקלות:`
-              : `היי ${displayName}! תראה/י אילו דברים מגניבים אפשר לעשות עכשיו באפליקציה:`}
+              ? `היי ${displayName}, הנה היכולת החדשה שהוספנו בגרסה הנוכחית:`
+              : `היי ${displayName}! תראה/י מה חדש בגרסה הנוכחית:`}
           </p>
         </div>
 
